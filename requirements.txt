@@ -2,3 +2,4 @@ streamlit
 pandas
 supabase
 requests
+openpyxl
