@@ -3,6 +3,9 @@ from supabase import create_client
 import pandas as pd
 from datetime import datetime
 import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Configuration Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -19,7 +22,8 @@ def login(email, password):
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         return response
     except Exception as e:
-        return {"error": str(e)}
+        st.error(f"Erreur lors de la connexion : {e}")
+        return None
 
 # Récupération du rôle utilisateur
 def get_user_role(auth_user_id):
@@ -47,10 +51,38 @@ def add_nonconformity(data):
         response = supabase.table("NonConformites").insert(data).execute()
         if response.status_code == 201:
             st.success("Non-conformité ajoutée avec succès.")
+            send_email_notification(data)
         else:
             st.error("Erreur lors de l'ajout de la non-conformité.")
     except Exception as e:
         st.error(f"Erreur : {e}")
+
+# Envoyer une notification par e-mail
+def send_email_notification(data):
+    """Envoyer une notification par e-mail."""
+    sender_email = "your_email@example.com"
+    receiver_email = "receiver_email@example.com"
+    password = "your_email_password"
+
+    subject = "Nouvelle Non-Conformité Ajoutée"
+    body = f"Une nouvelle non-conformité a été ajoutée :\n\n{data}"
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        server = smtplib.SMTP('smtp.example.com', 587)
+        server.starttls()
+        server.login(sender_email, password)
+        text = msg.as_string()
+        server.sendmail(sender_email, receiver_email, text)
+        server.quit()
+        st.success("Notification envoyée par e-mail.")
+    except Exception as e:
+        st.error(f"Erreur lors de l'envoi de l'e-mail : {e}")
 
 # Formulaire d'édition des non-conformités
 def edit_nonconformity(nonconformity, role):
@@ -99,6 +131,7 @@ def edit_nonconformity(nonconformity, role):
                 }).execute()
 
             st.success("Modifications enregistrées avec succès!")
+            send_email_notification(data)
 
 # Interface principale
 def main():
@@ -108,7 +141,7 @@ def main():
     password = st.text_input("Mot de passe", type="password")
     if st.button("Se connecter"):
         result = login(email, password)
-        if "error" not in result:
+        if result:
             user = result.user
             st.session_state["auth_user_id"] = user["id"]
             user_data = get_user_role(user["id"])
@@ -143,11 +176,29 @@ def main():
         elif role == "Audité":
             st.title("Espace Audité")
             st.write("### Mes non-conformités")
-            data = supabase.table("NonConformites").select("*").eq("entreprise_id", entreprise_id).execute()
+            search_term = st.text_input("Rechercher par numéro d'exigence")
+            status_filter = st.selectbox("Filtrer par statut", options=["Tous", "En cours", "Soumise", "Validée"])
+
+            query = supabase.table("NonConformites").select("*").eq("entreprise_id", entreprise_id)
+            if search_term:
+                query = query.ilike("requirementNo", f"%{search_term}%")
+            if status_filter != "Tous":
+                query = query.eq("correctionStatus", status_filter)
+
+            data = query.execute()
             for row in data.data:
                 st.write(f"**Numéro d'exigence** : {row['requirementNo']}")
-                st.button(f"Modifier {row['requirementNo']}", on_click=edit_nonconformity, args=(row, role))
+                if st.button(f"Modifier {row['requirementNo']}"):
+                    edit_nonconformity(row, role)
+
+            # Rapports et Analyses
+            st.write("### Rapports et Analyses")
+            report_data = supabase.table("NonConformites").select("*").eq("entreprise_id", entreprise_id).execute()
+            if report_data.data:
+                df_report = pd.DataFrame(report_data.data)
+                st.write("Nombre total de non-conformités :", len(df_report))
+                st.write("Non-conformités par statut :", df_report["correctionStatus"].value_counts())
+                st.write(df_report)
 
 if __name__ == "__main__":
     main()
-
