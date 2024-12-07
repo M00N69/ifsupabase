@@ -15,35 +15,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Page Configuration
 st.set_page_config(page_title="Gestion Non-Conformités", layout="wide")
 
-# Authentification
-def login(email, password):
-    """Se connecter via Supabase Auth."""
-    try:
-        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        st.write(f"Response: {response}")  # Debugging line
-        if not response.user:
-            st.error("Erreur lors de la connexion : Identifiants incorrects.")
-            return None
-        return response
-    except Exception as e:
-        st.error(f"Erreur lors de la connexion : {e}")
-        return None
-
-# Récupération du rôle utilisateur
-def get_user_role(auth_user_id):
-    """Récupérer le rôle et l'entreprise de l'utilisateur."""
-    try:
-        response = supabase.table("user_profiles").select("*").eq("auth.users.id", auth_user_id).execute()
-        st.write(f"User profile response: {response}")  # Debugging line
-        if response.data:
-            return response.data[0]
-        else:
-            st.error("Aucun profil utilisateur trouvé pour cet auth_user_id.")
-            return None
-    except Exception as e:
-        st.error(f"Erreur lors de la récupération du rôle utilisateur : {e}")
-        return None
-
 # Téléversement d'un fichier Excel
 def process_excel_file(uploaded_file):
     """Charger et traiter un fichier Excel contenant les non-conformités."""
@@ -142,73 +113,52 @@ def edit_nonconformity(nonconformity, role):
 
 # Interface principale
 def main():
-    # Authentification
-    st.title("Console de connexion")
-    email = st.text_input("Email")
-    password = st.text_input("Mot de passe", type="password")
-    if st.button("Se connecter"):
-        result = login(email, password)
-        if result and result.user:
-            user = result.user
-            st.write(f"User data: {user}")  # Debugging line
-            st.session_state["auth_user_id"] = user.id
-            user_data = get_user_role(user.id)
-            if user_data:
-                st.session_state["role"] = user_data["role"]
-                st.session_state["user_id"] = user_data["id"]
-                st.success(f"Bienvenue {user_data['role']}!")
-            else:
-                st.error("Utilisateur non configuré dans la base de données.")
-        else:
-            st.error("Email ou mot de passe incorrect.")
-
     # Interface pour les utilisateurs connectés
-    if "auth_user_id" in st.session_state:
-        role = st.session_state["role"]
-        user_id = st.session_state["user_id"]
+    st.session_state["role"] = "Auditeur"  # Définir le rôle par défaut
+    st.session_state["user_id"] = "example_user_id"  # Définir un user_id par défaut
 
-        if role == "Auditeur":
-            st.title("Espace Auditeur")
-            uploaded_file = st.file_uploader("Télécharger un fichier Excel contenant des non-conformités", type=["xlsx"])
-            if uploaded_file:
-                df = process_excel_file(uploaded_file)
-                if df is not None:
-                    for _, row in df.iterrows():
-                        add_nonconformity({
-                            "user_id": user_id,
-                            "object": row["object"],
-                            "type": row["type"],
-                            "description": row["description"],
-                            "status": row.get("status", "En cours"),
-                            "images": []
-                        })
+    if st.session_state["role"] == "Auditeur":
+        st.title("Espace Auditeur")
+        uploaded_file = st.file_uploader("Télécharger un fichier Excel contenant des non-conformités", type=["xlsx"])
+        if uploaded_file:
+            df = process_excel_file(uploaded_file)
+            if df is not None:
+                for _, row in df.iterrows():
+                    add_nonconformity({
+                        "user_id": st.session_state["user_id"],
+                        "object": row["object"],
+                        "type": row["type"],
+                        "description": row["description"],
+                        "status": row.get("status", "En cours"),
+                        "images": []
+                    })
 
-        elif role == "Audité":
-            st.title("Espace Audité")
-            st.write("### Mes non-conformités")
-            search_term = st.text_input("Rechercher par numéro d'exigence")
-            status_filter = st.selectbox("Filtrer par statut", options=["Tous", "En cours", "Soumise", "Validée"])
+    elif st.session_state["role"] == "Audité":
+        st.title("Espace Audité")
+        st.write("### Mes non-conformités")
+        search_term = st.text_input("Rechercher par numéro d'exigence")
+        status_filter = st.selectbox("Filtrer par statut", options=["Tous", "En cours", "Soumise", "Validée"])
 
-            query = supabase.table("non_conformities").select("*").eq("user_id", user_id)
-            if search_term:
-                query = query.ilike("object", f"%{search_term}%")
-            if status_filter != "Tous":
-                query = query.eq("status", status_filter)
+        query = supabase.table("non_conformities").select("*").eq("user_id", st.session_state["user_id"])
+        if search_term:
+            query = query.ilike("object", f"%{search_term}%")
+        if status_filter != "Tous":
+            query = query.eq("status", status_filter)
 
-            data = query.execute()
-            for row in data.data:
-                st.write(f"**Numéro d'exigence** : {row['object']}")
-                if st.button(f"Modifier {row['object']}"):
-                    edit_nonconformity(row, role)
+        data = query.execute()
+        for row in data.data:
+            st.write(f"**Numéro d'exigence** : {row['object']}")
+            if st.button(f"Modifier {row['object']}"):
+                edit_nonconformity(row, st.session_state["role"])
 
-            # Rapports et Analyses
-            st.write("### Rapports et Analyses")
-            report_data = supabase.table("non_conformities").select("*").eq("user_id", user_id).execute()
-            if report_data.data:
-                df_report = pd.DataFrame(report_data.data)
-                st.write("Nombre total de non-conformités :", len(df_report))
-                st.write("Non-conformités par statut :", df_report["status"].value_counts())
-                st.write(df_report)
+        # Rapports et Analyses
+        st.write("### Rapports et Analyses")
+        report_data = supabase.table("non_conformities").select("*").eq("user_id", st.session_state["user_id"]).execute()
+        if report_data.data:
+            df_report = pd.DataFrame(report_data.data)
+            st.write("Nombre total de non-conformités :", len(df_report))
+            st.write("Non-conformités par statut :", df_report["status"].value_counts())
+            st.write(df_report)
 
 if __name__ == "__main__":
     main()
