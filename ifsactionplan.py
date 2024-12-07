@@ -28,7 +28,7 @@ def login(email, password):
 # Récupération du rôle utilisateur
 def get_user_role(auth_user_id):
     """Récupérer le rôle et l'entreprise de l'utilisateur."""
-    response = supabase.table("Utilisateurs").select("*").eq("auth_user_id", auth_user_id).execute()
+    response = supabase.table("user_profiles").select("*").eq("auth_user_id", auth_user_id).execute()
     if response.data:
         return response.data[0]
     return None
@@ -46,9 +46,9 @@ def process_excel_file(uploaded_file):
 
 # Ajouter une non-conformité dans la base
 def add_nonconformity(data):
-    """Ajouter une non-conformité dans la table NonConformites."""
+    """Ajouter une non-conformité dans la table non_conformities."""
     try:
-        response = supabase.table("NonConformites").insert(data).execute()
+        response = supabase.table("non_conformities").insert(data).execute()
         if response.status_code == 201:
             st.success("Non-conformité ajoutée avec succès.")
             send_email_notification(data)
@@ -89,8 +89,8 @@ def edit_nonconformity(nonconformity, role):
     """Formulaire pour modifier une non-conformité."""
     with st.form(key=f"form_edit_{nonconformity['id']}"):
         st.write("### Modifier Non-Conformité")
-        st.text_input("Numéro d'exigence", nonconformity["requirementNo"], disabled=True)
-        st.text_area("Description de la non-conformité", nonconformity["requirementText"], disabled=True)
+        st.text_input("Numéro d'exigence", nonconformity["object"], disabled=True)
+        st.text_area("Description de la non-conformité", nonconformity["description"], disabled=True)
         correction = st.text_area("Correction proposée", nonconformity.get("correctionDescription", ""))
         corrective_action = st.text_area("Action corrective", nonconformity.get("correctiveActionDescription", ""))
 
@@ -99,10 +99,10 @@ def edit_nonconformity(nonconformity, role):
             status = st.selectbox(
                 "Statut",
                 options=["En cours", "Soumise", "Validée"],
-                index=["En cours", "Soumise", "Validée"].index(nonconformity.get("correctionStatus", "En cours"))
+                index=["En cours", "Soumise", "Validée"].index(nonconformity.get("status", "En cours"))
             )
         else:
-            status = nonconformity.get("correctionStatus", "En cours")
+            status = nonconformity.get("status", "En cours")
             st.write(f"Statut actuel : {status}")
 
         # Téléversement de fichiers
@@ -114,21 +114,17 @@ def edit_nonconformity(nonconformity, role):
             data = {
                 "correctionDescription": correction,
                 "correctiveActionDescription": corrective_action,
-                "correctionStatus": status,
-                "date_submission": datetime.utcnow() if status == "Soumise" else None,
+                "status": status,
+                "updated_at": datetime.utcnow() if status == "Soumise" else None,
             }
-            supabase.table("NonConformites").update(data).eq("id", nonconformity["id"]).execute()
+            supabase.table("non_conformities").update(data).eq("id", nonconformity["id"]).execute()
 
             # Téléversement des fichiers
             for file in uploaded_files:
                 file_path = f"files/{nonconformity['id']}/{file.name}"
-                supabase.storage.from_('files').upload(file_path, file)
-                file_url = f"{SUPABASE_URL}/storage/v1/object/public/files/{file_path}"
-                supabase.table("Fichiers").insert({
-                    "non_conformite_id": nonconformity["id"],
-                    "nom": file.name,
-                    "url": file_url,
-                }).execute()
+                supabase.storage.from_('non-conformity-images').upload(file_path, file)
+                file_url = f"{SUPABASE_URL}/storage/v1/object/public/non-conformity-images/{file_path}"
+                supabase.table("non_conformities").update({"images": supabase.functions.array_append("images", file_url)}).eq("id", nonconformity["id"]).execute()
 
             st.success("Modifications enregistrées avec succès!")
             send_email_notification(data)
@@ -147,7 +143,7 @@ def main():
             user_data = get_user_role(user["id"])
             if user_data:
                 st.session_state["role"] = user_data["role"]
-                st.session_state["entreprise_id"] = user_data["entreprise_id"]
+                st.session_state["user_id"] = user_data["id"]
                 st.success(f"Bienvenue {user_data['role']}!")
             else:
                 st.error("Utilisateur non configuré dans la base de données.")
@@ -157,7 +153,7 @@ def main():
     # Interface pour les utilisateurs connectés
     if "auth_user_id" in st.session_state:
         role = st.session_state["role"]
-        entreprise_id = st.session_state["entreprise_id"]
+        user_id = st.session_state["user_id"]
 
         if role == "Auditeur":
             st.title("Espace Auditeur")
@@ -167,10 +163,12 @@ def main():
                 if df is not None:
                     for _, row in df.iterrows():
                         add_nonconformity({
-                            "entreprise_id": entreprise_id,
-                            "requirementNo": row["requirementNo"],
-                            "requirementText": row["requirementText"],
-                            "requirementExplanation": row.get("requirementExplanation", ""),
+                            "user_id": user_id,
+                            "object": row["object"],
+                            "type": row["type"],
+                            "description": row["description"],
+                            "status": row.get("status", "En cours"),
+                            "images": []
                         })
 
         elif role == "Audité":
@@ -179,25 +177,25 @@ def main():
             search_term = st.text_input("Rechercher par numéro d'exigence")
             status_filter = st.selectbox("Filtrer par statut", options=["Tous", "En cours", "Soumise", "Validée"])
 
-            query = supabase.table("NonConformites").select("*").eq("entreprise_id", entreprise_id)
+            query = supabase.table("non_conformities").select("*").eq("user_id", user_id)
             if search_term:
-                query = query.ilike("requirementNo", f"%{search_term}%")
+                query = query.ilike("object", f"%{search_term}%")
             if status_filter != "Tous":
-                query = query.eq("correctionStatus", status_filter)
+                query = query.eq("status", status_filter)
 
             data = query.execute()
             for row in data.data:
-                st.write(f"**Numéro d'exigence** : {row['requirementNo']}")
-                if st.button(f"Modifier {row['requirementNo']}"):
+                st.write(f"**Numéro d'exigence** : {row['object']}")
+                if st.button(f"Modifier {row['object']}"):
                     edit_nonconformity(row, role)
 
             # Rapports et Analyses
             st.write("### Rapports et Analyses")
-            report_data = supabase.table("NonConformites").select("*").eq("entreprise_id", entreprise_id).execute()
+            report_data = supabase.table("non_conformities").select("*").eq("user_id", user_id).execute()
             if report_data.data:
                 df_report = pd.DataFrame(report_data.data)
                 st.write("Nombre total de non-conformités :", len(df_report))
-                st.write("Non-conformités par statut :", df_report["correctionStatus"].value_counts())
+                st.write("Non-conformités par statut :", df_report["status"].value_counts())
                 st.write(df_report)
 
 if __name__ == "__main__":
