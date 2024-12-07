@@ -21,8 +21,8 @@ def login(email, password):
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         st.write(f"Response: {response}")  # Debugging line
-        if hasattr(response, 'error'):
-            st.error(f"Erreur lors de la connexion : {response.error.message}")
+        if not response.user:
+            st.error("Erreur lors de la connexion : Identifiants incorrects.")
             return None
         return response
     except Exception as e:
@@ -141,11 +141,11 @@ def main():
     password = st.text_input("Mot de passe", type="password")
     if st.button("Se connecter"):
         result = login(email, password)
-        if result:
+        if result and result.user:
             user = result.user
             st.write(f"User data: {user}")  # Debugging line
-            st.session_state["auth_user_id"] = user["id"]
-            user_data = get_user_role(user["id"])
+            st.session_state["auth_user_id"] = user.id
+            user_data = get_user_role(user.id)
             if user_data:
                 st.session_state["role"] = user_data["role"]
                 st.session_state["user_id"] = user_data["id"]
