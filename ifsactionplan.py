@@ -32,10 +32,17 @@ def login(email, password):
 # Récupération du rôle utilisateur
 def get_user_role(auth_user_id):
     """Récupérer le rôle et l'entreprise de l'utilisateur."""
-    response = supabase.table("user_profiles").select("*").eq("auth_user_id", auth_user_id).execute()
-    if response.data:
-        return response.data[0]
-    return None
+    try:
+        response = supabase.table("user_profiles").select("*").eq("auth.users.id", auth_user_id).execute()
+        st.write(f"User profile response: {response}")  # Debugging line
+        if response.data:
+            return response.data[0]
+        else:
+            st.error("Aucun profil utilisateur trouvé pour cet auth_user_id.")
+            return None
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération du rôle utilisateur : {e}")
+        return None
 
 # Téléversement d'un fichier Excel
 def process_excel_file(uploaded_file):
