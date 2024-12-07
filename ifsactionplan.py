@@ -20,7 +20,8 @@ def login(email, password):
     """Se connecter via Supabase Auth."""
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        if response.error:
+        st.write(f"Response: {response}")  # Debugging line
+        if hasattr(response, 'error'):
             st.error(f"Erreur lors de la connexion : {response.error.message}")
             return None
         return response
