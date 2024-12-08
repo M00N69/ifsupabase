@@ -1,55 +1,34 @@
 import pandas as pd
 from openpyxl import load_workbook
-from datetime import datetime
-import streamlit as st
-
-
-def sanitize_value(value):
-    """Nettoie et convertit les valeurs pour éviter les erreurs."""
-    if isinstance(value, tuple):
-        value = value[0]
-    if isinstance(value, str):
-        value = value.strip()
-        try:
-            parsed_date = datetime.strptime(value, "%d.%m.%Y")
-            return parsed_date.strftime("%Y-%m-%d")
-        except ValueError:
-            pass
-        return value
-    if value in [None, "", " "]:
-        return None  # Retourne None pour les valeurs vides
-    return str(value)
-
 
 def extract_metadata(uploaded_file):
-    """Extrait les métadonnées du fichier Excel."""
+    """Extrait les métadonnées depuis le fichier Excel."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-        return {
-            "nom": sanitize_value(ws.cell(4, 3).value),  # Ligne 4, Colonne C
-            "coid": sanitize_value(ws.cell(5, 3).value),  # Ligne 5, Colonne C
-            "referentiel": sanitize_value(ws.cell(7, 3).value),  # Ligne 7, Colonne C
-            "type_audit": sanitize_value(ws.cell(8, 3).value),  # Ligne 8, Colonne C
-            "date_audit": sanitize_value(ws.cell(9, 3).value),  # Ligne 9, Colonne C
+        metadata = {
+            "nom": ws.cell(4, 3).value.strip(),
+            "coid": ws.cell(5, 3).value.strip(),
+            "referentiel": ws.cell(7, 3).value.strip(),
+            "type_audit": ws.cell(8, 3).value.strip(),
+            "date_audit": ws.cell(9, 3).value.strip(),
         }
+        return metadata
     except Exception as e:
-        st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
-        return None
-
+        raise Exception(f"Erreur lors de l'extraction des métadonnées : {e}")
 
 def extract_nonconformities(uploaded_file):
-    """Extrait les non-conformités du fichier Excel."""
+    """Extrait les non-conformités depuis le fichier Excel."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Ligne 12 (en-têtes)
+        headers = [cell.value.strip() for cell in ws[12]]  # Row 12 as headers
         data = []
-        for row in ws.iter_rows(min_row=14, values_only=True):  # Données à partir de la ligne 14
-            if any(row):  # Ignore les lignes vides
-                data.append([sanitize_value(cell) for cell in row])
+        for row in ws.iter_rows(min_row=14, values_only=True):
+            if any(row):  # Ignore empty rows
+                data.append(row)
         df = pd.DataFrame(data, columns=headers)
-        column_mapping = {
+        df = df.rename(columns={
             "requirementNo": "requirementno",
             "requirementText": "requirementtext",
             "requirementScore": "requirementscore",
@@ -58,16 +37,9 @@ def extract_nonconformities(uploaded_file):
             "correctionResponsibility": "correctionresponsibility",
             "correctionDueDate": "correctionduedate",
             "correctionStatus": "correctionstatus",
-            "correctionEvidence": "correctionevidence",
-            "correctiveActionDescription": "correctiveactiondescription",
-            "correctiveActionResponsibility": "correctiveactionresponsibility",
-            "correctiveActionDueDate": "correctiveactionduedate",
-            "correctiveActionStatus": "correctiveactionstatus",
             "releaseResponsibility": "releaseresponsibility",
             "releaseDate": "releasedate",
-        }
-        return df.rename(columns=column_mapping)
+        })
+        return df
     except Exception as e:
-        st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
-        return None
-
+        raise Exception(f"Erreur lors de l'extraction des non-conformités : {e}")
