@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities
+from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities, upload_file_to_supabase
 import pandas as pd
 
 def render_nonconformities_page():
@@ -56,6 +56,9 @@ def render_nonconformities_page():
                         "Statut de l'action corrective", options=["En cours", "Soumise", "Validée"], index=0
                     )
 
+                    # File upload for correction evidence
+                    uploaded_files = st.file_uploader("Téléverser des fichiers de preuve de correction", accept_multiple_files=True)
+
                     if st.form_submit_button("Sauvegarder"):
                         try:
                             update_data = {
@@ -74,6 +77,11 @@ def render_nonconformities_page():
                                 st.success("Modifications enregistrées avec succès.")
                             else:
                                 st.error(f"Erreur lors de la sauvegarde : {response}")
+
+                            # Upload files to Supabase
+                            if uploaded_files:
+                                for file in uploaded_files:
+                                    upload_file_to_supabase(file, row['id'])
                         except Exception as e:
                             st.error(f"Erreur lors de la sauvegarde : {e}")
     else:
