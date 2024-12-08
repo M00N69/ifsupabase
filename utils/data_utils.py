@@ -68,3 +68,4 @@ def extract_nonconformities(uploaded_file):
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
+
