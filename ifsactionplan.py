@@ -2,6 +2,7 @@ import streamlit as st
 from openpyxl import load_workbook
 from supabase import create_client, Client
 import pandas as pd
+from datetime import datetime
 
 # Configuration Supabase via st.secrets
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -14,6 +15,12 @@ def sanitize_value(value):
     if isinstance(value, tuple):
         value = value[0]
     if isinstance(value, str):
+        try:
+            # Convertir une date au format attendu par PostgreSQL
+            parsed_date = datetime.strptime(value, "%d.%m.%Y")
+            return parsed_date.strftime("%Y-%m-%d")  # Retourner au format YYYY-MM-DD
+        except ValueError:
+            pass  # Ce n'est pas une date, continuer le traitement
         return value.strip()
     if value is None:
         return "Non spécifié"
@@ -59,7 +66,25 @@ def extract_nonconformities(uploaded_file):
             if any(row):  # Ignorer les lignes vides
                 data.append([sanitize_value(cell) for cell in row])
 
-        return pd.DataFrame(data, columns=headers)
+        # Renommer les colonnes pour correspondre aux champs de la table "nonconformites"
+        df = pd.DataFrame(data, columns=headers)
+        column_mapping = {
+            "requirementNo": "requirementno",
+            "requirementText": "requirementtext",
+            "requirementExplanation": "requirementexplanation",
+            "correctionDescription": "correctiondescription",
+            "correctionResponsibility": "correctionresponsibility",
+            "correctionDueDate": "correctionduedate",
+            "correctionStatus": "correctionstatus",
+            "correctionEvidence": "correctionevidence",
+            "correctiveActionDescription": "correctiveactiondescription",
+            "correctiveActionResponsibility": "correctiveactionresponsibility",
+            "correctiveActionDueDate": "correctiveactionduedate",
+            "correctiveActionStatus": "correctiveactionstatus",
+            "releaseResponsibility": "releaseresponsibility",
+            "releaseDate": "releasedate",
+        }
+        return df.rename(columns=column_mapping)
 
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
