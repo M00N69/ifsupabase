@@ -60,9 +60,10 @@ def insert_into_supabase(metadata, nonconformities):
                 elif key in record:
                     record[key] = None
 
-            # Ensure correctionstatus has a valid value
-            if "correctionstatus" not in record or not record["correctionstatus"]:
-                record["correctionstatus"] = "En cours"  # Set a default value if empty
+            # Ensure all fields are set to None if they are empty
+            for key in record:
+                if record[key] in [None, "", " "]:
+                    record[key] = None
 
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         if not response.data:
