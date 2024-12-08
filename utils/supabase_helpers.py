@@ -73,6 +73,17 @@ def insert_into_supabase(metadata, nonconformities):
     except Exception as e:
         st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
 
+def update_nonconformity(nonconformity_id, update_data):
+    """Update a non-conformity in Supabase."""
+    try:
+        response = supabase.table("nonconformites").update(update_data).eq("id", nonconformity_id).execute()
+        if response.data:
+            st.success("Modifications enregistrées avec succès.")
+        else:
+            st.error(f"Erreur lors de la mise à jour : {response}")
+    except Exception as e:
+        st.error(f"Erreur lors de la mise à jour : {e}")
+
 def upload_file_to_supabase(file, nonconformity_id):
     """Upload a file to Supabase storage and associate it with a non-conformity."""
     try:
