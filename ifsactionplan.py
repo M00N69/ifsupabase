@@ -1,6 +1,6 @@
 import streamlit as st
-from pages.nonconformities import render_nonconformities_page
-from pages.upload import render_upload_page
+from utils.pages.upload import render_upload_page
+from utils.pages.nonconformities import render_nonconformities_page
 
 def main():
     """Main application logic."""
