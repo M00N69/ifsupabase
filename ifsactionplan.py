@@ -49,11 +49,11 @@ def sanitize_constrained_fields(dataframe):
     """Sanitize fields with constraints like correctionstatus."""
     if "correctionstatus" in dataframe.columns:
         dataframe["correctionstatus"] = dataframe["correctionstatus"].apply(
-            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS)
+            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS) or "En cours"  # Default to 'En cours'
         )
     if "correctiveactionstatus" in dataframe.columns:
         dataframe["correctiveactionstatus"] = dataframe["correctiveactionstatus"].apply(
-            lambda x: validate_enum_value(x, VALID_ACTION_STATUS)
+            lambda x: validate_enum_value(x, VALID_ACTION_STATUS) or "En cours"  # Default to 'En cours'
         )
     return dataframe
 
