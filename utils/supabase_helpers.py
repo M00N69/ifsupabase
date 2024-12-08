@@ -15,6 +15,10 @@ def check_existing_metadata(client: Client, coid: str):
 def insert_metadata(client: Client, metadata: dict):
     """Insère les métadonnées dans la table 'entreprises'."""
     try:
+        # Validation des métadonnées avant insertion
+        if not metadata.get("nom") or not metadata.get("coid") or not metadata.get("date_audit"):
+            raise ValueError("Les métadonnées sont incomplètes ou mal formatées.")
+        
         response = client.table("entreprises").insert(metadata).execute()
         if not response.data:
             raise ValueError(f"Échec de l'insertion des métadonnées : {response}")
@@ -27,8 +31,11 @@ def insert_metadata(client: Client, metadata: dict):
 def insert_nonconformities(client: Client, nonconformities, entreprise_id: str):
     """Insère les non-conformités dans la table 'nonconformites'."""
     try:
-        nonconformities["entreprise_id"] = entreprise_id  # Ajout de l'ID de l'entreprise
+        # Validation : Ajouter l'ID de l'entreprise aux non-conformités
+        nonconformities["entreprise_id"] = entreprise_id
         records = nonconformities.to_dict(orient="records")
+
+        # Insertion dans Supabase
         response = client.table("nonconformites").insert(records).execute()
         if not response.data:
             raise ValueError(f"Échec de l'insertion des non-conformités : {response}")
