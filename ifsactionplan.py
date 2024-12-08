@@ -13,13 +13,13 @@ def extract_metadata(file_path):
         # Charger les 10 premières lignes pour les métadonnées
         metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10)
 
-        # Extraction directe à partir des indices de cellules
+        # Extraction directe des cellules spécifiques
         metadata_dict = {
             "Entreprise": metadata.iloc[1, 1],  # Ligne 2, Colonne B
             "COID": metadata.iloc[2, 1],       # Ligne 3, Colonne B
-            "Référentiel": metadata.iloc[3, 1],  # Ligne 4, Colonne B
-            "Type d'audit": metadata.iloc[4, 1],  # Ligne 5, Colonne B
-            "Date de début d'audit": metadata.iloc[5, 1]  # Ligne 6, Colonne B
+            "Référentiel": metadata.iloc[4, 1],  # Ligne 5, Colonne B
+            "Type d'audit": metadata.iloc[5, 1],  # Ligne 6, Colonne B
+            "Date de début d'audit": metadata.iloc[6, 1]  # Ligne 7, Colonne B
         }
 
         # Vérification des champs manquants
