@@ -1,12 +1,6 @@
 import streamlit as st
-from supabase import create_client, Client
-from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities, upload_file_to_supabase
+from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities, upload_file_to_supabase, update_nonconformity
 import pandas as pd
-
-# Configuration Supabase via st.secrets
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def render_nonconformities_page():
     """Page for viewing and filtering non-conformities."""
@@ -78,11 +72,7 @@ def render_nonconformities_page():
                                 "correctiveactionduedate": corrective_action_due_date,
                                 "correctiveactionstatus": corrective_action_status,
                             }
-                            response = supabase.table("nonconformites").update(update_data).eq("id", row['id']).execute()
-                            if response.data:
-                                st.success("Modifications enregistrées avec succès.")
-                            else:
-                                st.error(f"Erreur lors de la sauvegarde : {response}")
+                            update_nonconformity(row['id'], update_data)
 
                             # Upload files to Supabase
                             if uploaded_files:
