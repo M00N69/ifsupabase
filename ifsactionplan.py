@@ -14,14 +14,15 @@ def sanitize_value(value):
     if isinstance(value, tuple):
         value = value[0]
     if isinstance(value, str):
+        value = value.strip()
+        # Try parsing date if applicable
         try:
             parsed_date = datetime.strptime(value, "%d.%m.%Y")
             return parsed_date.strftime("%Y-%m-%d")
         except ValueError:
-            pass
-        return value.strip()
-    if value is None:
-        return None
+            return value  # Return as string if not a date
+    if value in [None, "", " "]:
+        return None  # Return None for empty values
     return str(value)
 
 def extract_metadata(uploaded_file):
