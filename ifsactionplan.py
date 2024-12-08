@@ -1,7 +1,13 @@
 import pandas as pd
 import streamlit as st
+from supabase import create_client, Client
 
-# Charger le fichier Excel
+# Configuration de Supabase
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Fonction pour extraire les métadonnées
 def extract_metadata(file_path):
     """Extraire les métadonnées générales de l'audit."""
     try:
@@ -18,6 +24,7 @@ def extract_metadata(file_path):
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
+# Fonction pour extraire les non-conformités
 def extract_nonconformities(file_path):
     """Extraire les non-conformités depuis le tableau principal."""
     try:
@@ -27,9 +34,49 @@ def extract_nonconformities(file_path):
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
 
+# Fonction pour insérer les données dans Supabase
+def insert_data_into_supabase(metadata, nonconformities):
+    """Insérer les métadonnées et non-conformités dans Supabase."""
+    try:
+        # Insertion des métadonnées dans la table 'entreprises'
+        entreprise_data = {
+            "nom": metadata["Entreprise"],
+            "coid": metadata["COID"],
+            "referentiel": metadata["Référentiel"],
+            "type_audit": metadata["Type d'audit"],
+            "date_audit": metadata["Date de début d'audit"]
+        }
+        entreprise_response = supabase.table("entreprises").insert(entreprise_data).execute()
+        entreprise_id = entreprise_response.data[0]["id"]
+        st.success(f"Entreprise ajoutée avec succès. ID: {entreprise_id}")
+
+        # Insertion des non-conformités dans la table 'nonconformites'
+        for _, row in nonconformities.iterrows():
+            nonconformity_data = {
+                "entreprise_id": entreprise_id,
+                "requirementno": row["requirementNo"],
+                "requirementtext": row["requirementText"],
+                "requirementexplanation": row["requirementExplanation"],
+                "correctiondescription": row["correctionDescription"],
+                "correctionresponsibility": row["correctionResponsibility"],
+                "correctionduedate": row["correctionDueDate"],
+                "correctionstatus": row["correctionStatus"],
+                "correctionevidence": row["correctionEvidence"],
+                "correctiveactiondescription": row["correctiveActionDescription"],
+                "correctiveactionresponsibility": row["correctiveActionResponsibility"],
+                "correctiveactionduedate": row["correctiveActionDueDate"],
+                "correctiveactionstatus": row["correctiveActionStatus"],
+                "releaseResponsibility": row["releaseResponsibility"],
+                "releaseDate": row["releaseDate"]
+            }
+            supabase.table("nonconformites").insert(nonconformity_data).execute()
+        st.success("Toutes les non-conformités ont été ajoutées avec succès.")
+    except Exception as e:
+        st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
+
 # Interface principale de Streamlit
 def main():
-    st.title("Extraction des Non-Conformités et Métadonnées")
+    st.title("Chargement des Non-Conformités dans Supabase")
     st.write("Téléchargez un fichier Excel contenant les non-conformités.")
 
     # Téléversement du fichier
@@ -48,14 +95,9 @@ def main():
             st.write("### Détails des Non-Conformités")
             st.dataframe(nonconformities)
 
-            # Option pour télécharger les non-conformités au format CSV
-            csv = nonconformities.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Télécharger les Non-Conformités en CSV",
-                data=csv,
-                file_name='nonconformites.csv',
-                mime='text/csv',
-            )
+            # Insertion des données dans Supabase
+            if st.button("Envoyer les données dans Supabase"):
+                insert_data_into_supabase(metadata, nonconformities)
 
 if __name__ == "__main__":
     main()
