@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client, Client
 
-# Configuration Supabase
+# Configuration de Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -13,8 +13,8 @@ def extract_metadata(file_path):
     try:
         metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10)
         metadata_dict = {
-            "Entreprise": metadata.iloc[1, 1],
-            "COID": metadata.iloc[2, 1],
+            "Entreprise": metadata.iloc[0, 1],
+            "COID": metadata.iloc[1, 1],
             "Référentiel": metadata.iloc[3, 1],
             "Type d'audit": metadata.iloc[4, 1],
             "Date de début d'audit": metadata.iloc[5, 1]
@@ -28,7 +28,7 @@ def extract_metadata(file_path):
 def extract_nonconformities(file_path):
     """Extraire les non-conformités depuis le tableau principal."""
     try:
-        data = pd.read_excel(file_path, sheet_name=0, skiprows=12)  # Sauter les lignes de l'entête
+        data = pd.read_excel(file_path, sheet_name=0, skiprows=12)  # Sauter les lignes inutiles
         return data
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
@@ -46,7 +46,12 @@ def insert_data_into_supabase(metadata, nonconformities):
             "type_audit": metadata["Type d'audit"],
             "date_audit": metadata["Date de début d'audit"]
         }
-        st.write("Insertion des métadonnées : ", entreprise_data)
+        st.write("Données préparées pour insertion (entreprises) :", entreprise_data)
+
+        if not all(entreprise_data.values()):
+            st.error("Les données des métadonnées contiennent des champs vides. Veuillez vérifier votre fichier.")
+            return
+
         entreprise_response = supabase.table("entreprises").insert(entreprise_data).execute()
         entreprise_id = entreprise_response.data[0]["id"]
         st.success(f"Entreprise ajoutée avec succès. ID: {entreprise_id}")
@@ -79,7 +84,7 @@ def insert_data_into_supabase(metadata, nonconformities):
                 "releaseDate": release_date
             }
 
-            st.write("Données préparées pour insertion :", nonconformity_data)
+            st.write("Données préparées pour insertion (non-conformités) :", nonconformity_data)
             supabase.table("nonconformites").insert(nonconformity_data).execute()
 
         st.success("Toutes les non-conformités ont été ajoutées avec succès.")
@@ -113,4 +118,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
