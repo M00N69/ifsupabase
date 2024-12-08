@@ -60,6 +60,7 @@ def extract_nonconformities(uploaded_file):
         column_mapping = {
             "requirementNo": "requirementno",
             "requirementText": "requirementtext",
+            "requirementScore": "requirementscore",
             "requirementExplanation": "requirementexplanation",
             "correctionDescription": "correctiondescription",
             "correctionResponsibility": "correctionresponsibility",
@@ -73,7 +74,14 @@ def extract_nonconformities(uploaded_file):
             "releaseResponsibility": "releaseresponsibility",
             "releaseDate": "releasedate",
         }
-        return df.rename(columns=column_mapping)
+        df = df.rename(columns=column_mapping)
+
+        # Ensure all dates are sanitized
+        for date_col in ["correctionduedate", "correctiveactionduedate", "releasedate"]:
+            if date_col in df.columns:
+                df[date_col] = df[date_col].apply(sanitize_value)
+
+        return df
 
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
