@@ -94,7 +94,9 @@ def upload_file_to_supabase(file, nonconformity_id):
         # Upload the file to the storage bucket
         file_path = f"nonconformities/{nonconformity_id}/{file_name}"
         response = supabase.storage.from_("nonconformities").upload(file_path, file_content)
-        if response.get("error"):
+
+        # Check if there was an error in the response
+        if 'error' in response:
             st.error(f"Erreur lors du téléversement du fichier : {response['error']}")
             return
 
