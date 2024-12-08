@@ -25,6 +25,15 @@ def sanitize_value(value):
         return None  # Return None for empty values
     return str(value)
 
+def sanitize_dates(dataframe, date_columns):
+    """Ensure date columns are properly formatted or set to None."""
+    for date_col in date_columns:
+        if date_col in dataframe.columns:
+            dataframe[date_col] = dataframe[date_col].apply(
+                lambda x: sanitize_value(x) if x else None
+            )
+    return dataframe
+
 def extract_metadata(uploaded_file):
     """Extract metadata from the audit."""
     try:
@@ -77,10 +86,9 @@ def extract_nonconformities(uploaded_file):
         }
         df = df.rename(columns=column_mapping)
 
-        # Ensure all dates are sanitized
-        for date_col in ["correctionduedate", "correctiveactionduedate", "releasedate"]:
-            if date_col in df.columns:
-                df[date_col] = df[date_col].apply(sanitize_value)
+        # Sanitize date columns
+        date_columns = ["correctionduedate", "correctiveactionduedate", "releasedate"]
+        df = sanitize_dates(df, date_columns)
 
         return df
 
