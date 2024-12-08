@@ -40,6 +40,22 @@ def render_nonconformities_page():
                     correction_status = st.selectbox(
                         "Statut de la correction", options=["En cours", "Soumise", "Validée"], index=0
                     )
+                    correction_evidence = st.text_area(
+                        "Preuve de correction", value=row['correctionevidence']
+                    )
+                    corrective_action_description = st.text_area(
+                        "Description de l'action corrective", value=row['correctiveactiondescription']
+                    )
+                    corrective_action_responsibility = st.text_input(
+                        "Responsabilité de l'action corrective", value=row['correctiveactionresponsibility']
+                    )
+                    corrective_action_due_date = st.date_input(
+                        "Date de l'action corrective", value=pd.to_datetime(row['correctiveactionduedate'])
+                    )
+                    corrective_action_status = st.selectbox(
+                        "Statut de l'action corrective", options=["En cours", "Soumise", "Validée"], index=0
+                    )
+
                     if st.form_submit_button("Sauvegarder"):
                         try:
                             update_data = {
@@ -47,6 +63,11 @@ def render_nonconformities_page():
                                 "correctionresponsibility": correction_responsibility,
                                 "correctionduedate": correction_due_date,
                                 "correctionstatus": correction_status,
+                                "correctionevidence": correction_evidence,
+                                "correctiveactiondescription": corrective_action_description,
+                                "correctiveactionresponsibility": corrective_action_responsibility,
+                                "correctiveactionduedate": corrective_action_due_date,
+                                "correctiveactionstatus": corrective_action_status,
                             }
                             response = supabase.table("nonconformites").update(update_data).eq("id", row['id']).execute()
                             if response.data:
@@ -57,4 +78,3 @@ def render_nonconformities_page():
                             st.error(f"Erreur lors de la sauvegarde : {e}")
     else:
         st.info("Aucune donnée trouvée pour ce filtre.")
-
