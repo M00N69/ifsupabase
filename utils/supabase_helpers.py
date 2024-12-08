@@ -76,9 +76,13 @@ def insert_into_supabase(metadata, nonconformities):
 def upload_file_to_supabase(file, nonconformity_id):
     """Upload a file to Supabase storage and associate it with a non-conformity."""
     try:
+        # Read the file content
+        file_content = file.getvalue()
+        file_name = file.name
+
         # Upload the file to the storage bucket
-        file_path = f"nonconformities/{nonconformity_id}/{file.name}"
-        response = supabase.storage.from_("nonconformities").upload(file_path, file)
+        file_path = f"nonconformities/{nonconformity_id}/{file_name}"
+        response = supabase.storage.from_("nonconformities").upload(file_path, file_content)
         if response.get("error"):
             st.error(f"Erreur lors du téléversement du fichier : {response['error']}")
             return
@@ -86,14 +90,13 @@ def upload_file_to_supabase(file, nonconformity_id):
         # Insert the file metadata into the database
         file_data = {
             "nonconformity_id": nonconformity_id,
-            "file_name": file.name,
+            "file_name": file_name,
             "file_path": file_path
         }
         response = supabase.table("correction_evidence").insert(file_data).execute()
         if response.data:
-            st.success(f"Fichier {file.name} téléversé avec succès.")
+            st.success(f"Fichier {file_name} téléversé avec succès.")
         else:
             st.error(f"Erreur lors de l'insertion des métadonnées du fichier : {response}")
     except Exception as e:
         st.error(f"Erreur lors du téléversement du fichier : {e}")
-
