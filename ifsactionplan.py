@@ -21,7 +21,7 @@ def sanitize_value(value):
             pass
         return value.strip()
     if value is None:
-        return "Non spécifié"
+        return None
     return str(value)
 
 def extract_metadata(uploaded_file):
@@ -84,8 +84,10 @@ def insert_into_supabase(metadata, nonconformities):
     try:
         # Insert metadata into the 'entreprises' table
         response = supabase.table("entreprises").insert(metadata).execute()
-        if response.error:
-            st.error(f"Erreur lors de l'insertion des métadonnées : {response.error.message}")
+        
+        # Check response for errors
+        if not response.data:
+            st.error(f"Erreur lors de l'insertion des métadonnées : {response}")
             return None
 
         # Extract the `id` of the inserted enterprise
@@ -97,8 +99,10 @@ def insert_into_supabase(metadata, nonconformities):
         # Prepare non-conformities data for insertion
         nonconformities_records = nonconformities.to_dict(orient="records")
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
-        if response.error:
-            st.error(f"Erreur lors de l'insertion des non-conformités : {response.error.message}")
+        
+        # Check response for errors
+        if not response.data:
+            st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
             return None
 
         st.success("Les données ont été insérées avec succès dans Supabase.")
