@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.supabase_helpers import insert_into_supabase
+from utils.supabase_helpers import insert_metadata_and_nonconformities
 from utils.data_utils import extract_metadata, extract_nonconformities
 
 
@@ -15,15 +15,19 @@ def render_upload_page():
             metadata = extract_metadata(uploaded_file)
             nonconformities = extract_nonconformities(uploaded_file)
 
-            # Affichage des résultats
-            st.write("### Métadonnées")
-            st.json(metadata)
-            st.write("### Non-Conformités")
-            st.dataframe(nonconformities)
+            # Vérification des données extraites
+            if metadata and not nonconformities.empty:
+                st.success("Données correctement extraites. Prêtes pour l'insertion.")
+            else:
+                st.error("Erreur : les données extraites sont incomplètes ou incorrectes.")
+                return
 
             # Bouton pour insérer dans Supabase
             if st.button("Insérer dans Supabase"):
-                insert_into_supabase(st.secrets["supabase_client"], metadata, nonconformities)
-                st.success("Les données ont été insérées avec succès.")
+                # Appel à la fonction pour insérer dans Supabase
+                result_message = insert_metadata_and_nonconformities(
+                    metadata, nonconformities
+                )
+                st.success(result_message)
         except Exception as e:
             st.error(f"Erreur : {e}")
