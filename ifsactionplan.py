@@ -7,42 +7,61 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Fonction pour extraire les métadonnées
 def extract_metadata(file_path):
-    """Extraire les métadonnées générales de l'audit."""
+    """Extraire les métadonnées générales de l'audit à partir de cellules fixes."""
     try:
-        # Charger une plage spécifique du fichier Excel
-        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10, usecols=[0, 1])
-        metadata = metadata.dropna(how='all')  # Supprimer les lignes vides
+        # Charger les 10 premières lignes pour les métadonnées
+        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10)
 
-        # Forcer toutes les valeurs de la première colonne en chaînes
-        metadata[0] = metadata[0].astype(str)
-
-        # Correction pour extraire chaque champ à partir de la bonne ligne
+        # Extraction directe à partir des indices de cellules
         metadata_dict = {
-            "Entreprise": metadata[metadata[0].str.contains("Entreprise", na=False)].iloc[0, 1],
-            "COID": metadata[metadata[0].str.contains("COID", na=False)].iloc[0, 1],
-            "Référentiel": metadata[metadata[0].str.contains("Référentiel", na=False)].iloc[0, 1],
-            "Type d'audit": metadata[metadata[0].str.contains("Type d'audit", na=False)].iloc[0, 1],
-            "Date de début d'audit": metadata[metadata[0].str.contains("Date de début", na=False)].iloc[0, 1]
+            "Entreprise": metadata.iloc[1, 1],  # Ligne 2, Colonne B
+            "COID": metadata.iloc[2, 1],       # Ligne 3, Colonne B
+            "Référentiel": metadata.iloc[3, 1],  # Ligne 4, Colonne B
+            "Type d'audit": metadata.iloc[4, 1],  # Ligne 5, Colonne B
+            "Date de début d'audit": metadata.iloc[5, 1]  # Ligne 6, Colonne B
         }
 
+        # Vérification des champs manquants
+        for key, value in metadata_dict.items():
+            if pd.isna(value):
+                st.warning(f"Le champ {key} est manquant ou vide dans le fichier.")
+
         return metadata_dict
+
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
-# Fonction pour extraire les non-conformités
 def extract_nonconformities(file_path):
     """Extraire les non-conformités depuis le tableau principal."""
     try:
-        data = pd.read_excel(file_path, sheet_name=0, skiprows=12)  # Sauter les lignes inutiles
+        # Charger les non-conformités à partir de la ligne 13
+        data = pd.read_excel(file_path, sheet_name=0, skiprows=12)
+
+        # Renommer les colonnes pour correspondre aux champs dans Supabase
+        data.rename(columns={
+            "requirementNo": "requirementno",
+            "requirementText": "requirementtext",
+            "requirementExplanation": "requirementexplanation",
+            "correctionDescription": "correctiondescription",
+            "correctionResponsibility": "correctionresponsibility",
+            "correctionDueDate": "correctionduedate",
+            "correctionStatus": "correctionstatus",
+            "correctionEvidence": "correctionevidence",
+            "correctiveActionDescription": "correctiveactiondescription",
+            "correctiveActionResponsibility": "correctiveactionresponsibility",
+            "correctiveActionDueDate": "correctiveactionduedate",
+            "correctiveActionStatus": "correctiveactionstatus",
+            "releaseResponsibility": "releaseresponsibility",
+            "releaseDate": "releasedate"
+        }, inplace=True)
+
         return data
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
 
-# Fonction pour insérer les données dans Supabase
 def insert_data_into_supabase(metadata, nonconformities):
     """Insérer les métadonnées et non-conformités dans Supabase."""
     try:
@@ -70,26 +89,26 @@ def insert_data_into_supabase(metadata, nonconformities):
             row = row.where(pd.notnull(row), None)
 
             # Convertir les dates au format ISO 8601
-            correction_due_date = row["correctionDueDate"].strftime("%Y-%m-%d") if row["correctionDueDate"] else None
-            corrective_action_due_date = row["correctiveActionDueDate"].strftime("%Y-%m-%d") if row["correctiveActionDueDate"] else None
-            release_date = row["releaseDate"].strftime("%Y-%m-%d") if row["releaseDate"] else None
+            correction_due_date = row["correctionduedate"].strftime("%Y-%m-%d") if row["correctionduedate"] else None
+            corrective_action_due_date = row["correctiveactionduedate"].strftime("%Y-%m-%d") if row["correctiveactionduedate"] else None
+            release_date = row["releasedate"].strftime("%Y-%m-%d") if row["releasedate"] else None
 
             nonconformity_data = {
                 "entreprise_id": entreprise_id,
-                "requirementno": row["requirementNo"],
-                "requirementtext": row["requirementText"],
-                "requirementexplanation": row["requirementExplanation"],
-                "correctiondescription": row["correctionDescription"],
-                "correctionresponsibility": row["correctionResponsibility"],
+                "requirementno": row["requirementno"],
+                "requirementtext": row["requirementtext"],
+                "requirementexplanation": row["requirementexplanation"],
+                "correctiondescription": row["correctiondescription"],
+                "correctionresponsibility": row["correctionresponsibility"],
                 "correctionduedate": correction_due_date,
-                "correctionstatus": row["correctionStatus"],
-                "correctionevidence": row["correctionEvidence"],
-                "correctiveactiondescription": row["correctiveActionDescription"],
-                "correctiveactionresponsibility": row["correctiveActionResponsibility"],
+                "correctionstatus": row["correctionstatus"],
+                "correctionevidence": row["correctionevidence"],
+                "correctiveactiondescription": row["correctiveactiondescription"],
+                "correctiveactionresponsibility": row["correctiveactionresponsibility"],
                 "correctiveactionduedate": corrective_action_due_date,
-                "correctiveactionstatus": row["correctiveActionStatus"],
-                "releaseResponsibility": row["releaseResponsibility"],
-                "releaseDate": release_date
+                "correctiveactionstatus": row["correctiveactionstatus"],
+                "releaseresponsibility": row["releaseresponsibility"],
+                "releasedate": release_date
             }
 
             st.write("Données préparées pour insertion (non-conformités) :", nonconformity_data)
@@ -99,28 +118,21 @@ def insert_data_into_supabase(metadata, nonconformities):
     except Exception as e:
         st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
 
-# Interface principale de Streamlit
 def main():
     st.title("Chargement des Non-Conformités dans Supabase")
-    st.write("Téléchargez un fichier Excel contenant les non-conformités.")
-
-    # Téléversement du fichier
     uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
 
     if uploaded_file:
-        # Extraction des métadonnées
         metadata = extract_metadata(uploaded_file)
         if metadata:
             st.write("### Métadonnées de l'Audit")
             st.json(metadata)
 
-        # Extraction des non-conformités
         nonconformities = extract_nonconformities(uploaded_file)
         if nonconformities is not None:
             st.write("### Détails des Non-Conformités")
             st.dataframe(nonconformities)
 
-            # Insertion des données dans Supabase
             if st.button("Envoyer les données dans Supabase"):
                 insert_data_into_supabase(metadata, nonconformities)
 
