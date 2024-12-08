@@ -1,6 +1,7 @@
 import streamlit as st
 from utils.pages.upload import render_upload_page
 from utils.pages.nonconformities import render_nonconformities_page
+from utils.supabase_helpers import update_nonconformity
 
 def main():
     """Main application logic."""
@@ -14,4 +15,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
