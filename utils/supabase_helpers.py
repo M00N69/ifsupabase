@@ -60,6 +60,10 @@ def insert_into_supabase(metadata, nonconformities):
                 elif key in record:
                     record[key] = None
 
+            # Ensure correctionstatus has a valid value
+            if "correctionstatus" not in record or not record["correctionstatus"]:
+                record["correctionstatus"] = "En cours"  # Set a default value if empty
+
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         if not response.data:
             st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
