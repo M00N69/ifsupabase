@@ -1,45 +1,56 @@
-from supabase import Client
+import streamlit as st
+from supabase import create_client, Client
+import pandas as pd
 
+# Configuration Supabase via st.secrets
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def check_existing_metadata(client: Client, coid: str) -> bool:
-    """Vérifie si une entreprise avec ce COID existe déjà."""
+def fetch_coid_list():
+    """Fetch unique COID values for the dropdown."""
     try:
-        response = client.table("entreprises").select("id").eq("coid", coid).execute()
-        return len(response.data) > 0
+        response = supabase.table("entreprises").select("coid").execute()
+        coid_list = [entry["coid"] for entry in response.data if "coid" in entry]
+        return coid_list
     except Exception as e:
-        raise Exception(f"Erreur lors de la vérification des métadonnées : {e}")
+        st.error(f"Erreur lors de la récupération des COID : {e}")
+        return []
 
-
-def insert_metadata_and_nonconformities(metadata: dict, nonconformities):
-    """
-    Insère les métadonnées et les non-conformités dans Supabase.
-    Retourne un message de succès ou une exception.
-    """
-    from utils.supabase_client import supabase
-
+def fetch_nonconformities(coid_filter=None):
+    """Fetch non-conformities data based on COID filter."""
     try:
-        # Étape 1 : Vérifier si l'entreprise existe
-        if check_existing_metadata(supabase, metadata["coid"]):
-            return f"L'entreprise avec le COID '{metadata['coid']}' existe déjà. Téléversement ignoré."
+        query = supabase.table("nonconformites").select("*")
+        if coid_filter:
+            # Filter non-conformities based on COID
+            entreprise_response = supabase.table("entreprises").select("id").eq("coid", coid_filter).execute()
+            if entreprise_response.data:
+                entreprise_id = entreprise_response.data[0]["id"]
+                query = query.eq("entreprise_id", entreprise_id)
+        response = query.execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération des non-conformités : {e}")
+        return pd.DataFrame()
 
-        # Étape 2 : Insérer les métadonnées
-        response_metadata = supabase.table("entreprises").insert(metadata).execute()
-        if not response_metadata.data:
-            raise Exception(f"Échec de l'insertion des métadonnées : {response_metadata}")
-
-        entreprise_id = response_metadata.data[0]["id"]
-
-        # Étape 3 : Ajouter l'ID d'entreprise aux non-conformités
+def insert_into_supabase(metadata, nonconformities):
+    """Insert metadata and non-conformities into Supabase."""
+    try:
+        existing = supabase.table("entreprises").select("*").eq("coid", metadata["coid"]).execute()
+        if existing.data:
+            st.warning("L'entreprise avec ce COID existe déjà. Téléversement ignoré.")
+            return
+        response = supabase.table("entreprises").insert(metadata).execute()
+        if not response.data:
+            st.error(f"Erreur lors de l'insertion des métadonnées : {response}")
+            return
+        entreprise_id = response.data[0]["id"]
         nonconformities["entreprise_id"] = entreprise_id
-
-        # Étape 4 : Insérer les non-conformités
-        records = nonconformities.to_dict(orient="records")
-        response_nonconformities = supabase.table("nonconformites").insert(records).execute()
-        if not response_nonconformities.data:
-            raise Exception(
-                f"Échec de l'insertion des non-conformités : {response_nonconformities}"
-            )
-
-        return "Les métadonnées et non-conformités ont été insérées avec succès."
+        nonconformities_records = nonconformities.to_dict(orient="records")
+        response = supabase.table("nonconformites").insert(nonconformities_records).execute()
+        if not response.data:
+            st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
+            return
+        st.success("Les données ont été insérées avec succès dans Supabase.")
     except Exception as e:
-        raise Exception(f"Erreur lors de l'insertion dans Supabase : {e}")
+        st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
