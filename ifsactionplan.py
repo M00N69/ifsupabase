@@ -7,13 +7,16 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Fonction pour extraire les métadonnées avec corrections
+# Fonction pour extraire les métadonnées
 def extract_metadata(file_path):
     """Extraire les métadonnées générales de l'audit."""
     try:
         # Charger une plage spécifique du fichier Excel
         metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10, usecols=[0, 1])
         metadata = metadata.dropna(how='all')  # Supprimer les lignes vides
+
+        # Forcer toutes les valeurs de la première colonne en chaînes
+        metadata[0] = metadata[0].astype(str)
 
         # Correction pour extraire chaque champ à partir de la bonne ligne
         metadata_dict = {
