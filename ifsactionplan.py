@@ -1,11 +1,5 @@
 import streamlit as st
 from openpyxl import load_workbook
-from supabase import create_client, Client
-
-# Configuration Supabase
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def extract_metadata(file_path):
     """Extraire les métadonnées générales de l'audit."""
@@ -13,7 +7,7 @@ def extract_metadata(file_path):
         wb = load_workbook(file_path)
         ws = wb.active
 
-        # Extraction brute des cellules spécifiques
+        # Lecture brute des cellules spécifiques
         metadata_dict = {
             "Entreprise": ws.cell(row=3, column=2).value,  # Ligne 3, Colonne B
             "COID": ws.cell(row=4, column=2).value,       # Ligne 4, Colonne B
@@ -22,6 +16,7 @@ def extract_metadata(file_path):
             "Date de début d'audit": ws.cell(row=8, column=2).value  # Ligne 8, Colonne B
         }
 
+        # Vérifier les champs manquants ou vides
         for key, value in metadata_dict.items():
             if value is None:
                 st.warning(f"Le champ {key} est vide. Veuillez vérifier votre fichier Excel.")
@@ -32,83 +27,16 @@ def extract_metadata(file_path):
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
-def extract_nonconformities(file_path):
-    """Extraire les non-conformités directement avec openpyxl."""
-    try:
-        wb = load_workbook(file_path)
-        ws = wb.active
-
-        # Début des données des non-conformités à partir de la ligne 13
-        start_row = 13
-        columns = [
-            "requirementno", "requirementtext", "requirementexplanation",
-            "correctiondescription", "correctionresponsibility",
-            "correctionduedate", "correctionstatus", "correctionevidence",
-            "correctiveactiondescription", "correctiveactionresponsibility",
-            "correctiveactionduedate", "correctiveactionstatus",
-            "releaseresponsibility", "releasedate"
-        ]
-
-        # Collecter les données ligne par ligne
-        data = []
-        for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, min_col=1, max_col=14):
-            row_data = [cell.value for cell in row]
-            if any(row_data):  # Ignorer les lignes vides
-                data.append(dict(zip(columns, row_data)))
-
-        return data
-
-    except Exception as e:
-        st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
-        return None
-
-def insert_data_into_supabase(metadata, nonconformities):
-    """Insérer les métadonnées et non-conformités dans Supabase."""
-    try:
-        # Insertion des métadonnées dans la table 'entreprises'
-        entreprise_data = {
-            "nom": metadata["Entreprise"],
-            "coid": metadata["COID"],
-            "referentiel": metadata["Référentiel"],
-            "type_audit": metadata["Type d'audit"],
-            "date_audit": metadata["Date de début d'audit"]
-        }
-        st.write("Données préparées pour insertion (entreprises) :", entreprise_data)
-
-        if not all(entreprise_data.values()):
-            st.error("Les métadonnées contiennent des champs vides. Veuillez vérifier votre fichier.")
-            return
-
-        entreprise_response = supabase.table("entreprises").insert(entreprise_data).execute()
-        entreprise_id = entreprise_response.data[0]["id"]
-        st.success(f"Entreprise ajoutée avec succès. ID: {entreprise_id}")
-
-        # Insertion des non-conformités
-        for row in nonconformities:
-            row["entreprise_id"] = entreprise_id
-            supabase.table("nonconformites").insert(row).execute()
-
-        st.success("Toutes les non-conformités ont été ajoutées avec succès.")
-    except Exception as e:
-        st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
-
 def main():
-    st.title("Chargement des Non-Conformités dans Supabase")
+    st.title("Extraction des Métadonnées et des Non-Conformités")
     uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
 
     if uploaded_file:
+        # Extraction des métadonnées
         metadata = extract_metadata(uploaded_file)
         if metadata:
             st.write("### Métadonnées de l'Audit")
             st.json(metadata)
-
-        nonconformities = extract_nonconformities(uploaded_file)
-        if nonconformities:
-            st.write("### Détails des Non-Conformités")
-            st.dataframe(nonconformities)
-
-            if st.button("Envoyer les données dans Supabase"):
-                insert_data_into_supabase(metadata, nonconformities)
 
 if __name__ == "__main__":
     main()
