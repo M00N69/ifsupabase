@@ -9,8 +9,9 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Allowed correctionstatus values
+# Allowed values for correctionstatus and other constrained fields
 VALID_CORRECTION_STATUS = ["En cours", "Soumise", "Validée"]
+VALID_ACTION_STATUS = ["En cours", "Soumise", "Validée"]
 
 def sanitize_value(value):
     """Clean and convert values to avoid errors."""
@@ -26,13 +27,13 @@ def sanitize_value(value):
             pass
         return value
     if value in [None, "", " "]:
-        return None
+        return None  # Return None for empty values
     return str(value)
 
 def validate_enum_value(value, valid_values):
     """Validate enum-like fields and map invalid values to None."""
     if value and value not in valid_values:
-        return None
+        return None  # Replace invalid value with None
     return value
 
 def sanitize_dates(dataframe, date_columns):
@@ -48,7 +49,11 @@ def sanitize_constrained_fields(dataframe):
     """Sanitize fields with constraints like correctionstatus."""
     if "correctionstatus" in dataframe.columns:
         dataframe["correctionstatus"] = dataframe["correctionstatus"].apply(
-            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS) or "En cours"
+            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS) or "En cours"  # Default to 'En cours'
+        )
+    if "correctiveactionstatus" in dataframe.columns:
+        dataframe["correctiveactionstatus"] = dataframe["correctiveactionstatus"].apply(
+            lambda x: validate_enum_value(x, VALID_ACTION_STATUS) or "En cours"  # Default to 'En cours'
         )
     return dataframe
 
@@ -83,14 +88,13 @@ def extract_nonconformities(uploaded_file):
             if any(row):  # Skip empty rows
                 data.append([sanitize_value(cell) for cell in row])
 
-        df = pd.DataFrame(data, columns=headers)
-
         # Rename columns to match 'nonconformites' table fields
+        df = pd.DataFrame(data, columns=headers)
         column_mapping = {
             "requirementNo": "requirementno",
             "requirementText": "requirementtext",
+            "requirementScore": "requirementscore",
             "requirementExplanation": "requirementexplanation",
-            "requirementScore": "requirementscore", 
             "correctionDescription": "correctiondescription",
             "correctionResponsibility": "correctionresponsibility",
             "correctionDueDate": "correctionduedate",
@@ -118,31 +122,18 @@ def extract_nonconformities(uploaded_file):
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
 
-def check_existing_enterprise(metadata):
-    """Check if the enterprise already exists."""
-    try:
-        response = supabase.table("entreprises").select("*").eq("coid", metadata["coid"]).execute()
-        if response.data:
-            return True
-    except Exception as e:
-        st.error(f"Erreur lors de la vérification de l'entreprise : {e}")
-    return False
-
 def insert_into_supabase(metadata, nonconformities):
     """Insert metadata and nonconformities into Supabase."""
     try:
-        # Check if the enterprise already exists
-        if check_existing_enterprise(metadata):
-            st.warning("L'entreprise avec ce COID a déjà été chargée.")
+        # Check if enterprise already exists
+        existing = supabase.table("entreprises").select("id").eq("coid", metadata["coid"]).execute()
+        if existing.data:
+            st.warning("Cette entreprise avec le même COID existe déjà.")
             return None
 
         # Insert metadata into the 'entreprises' table
         response = supabase.table("entreprises").insert(metadata).execute()
         
-        if not response.data:
-            st.error(f"Erreur lors de l'insertion des métadonnées : {response}")
-            return None
-
         # Extract the `id` of the inserted enterprise
         entreprise_id = response.data[0]["id"]
 
@@ -153,10 +144,6 @@ def insert_into_supabase(metadata, nonconformities):
         nonconformities_records = nonconformities.to_dict(orient="records")
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         
-        if not response.data:
-            st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
-            return None
-
         st.success("Les données ont été insérées avec succès dans Supabase.")
     except Exception as e:
         st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
@@ -168,13 +155,13 @@ def main():
 
     if uploaded_file:
         metadata = extract_metadata(uploaded_file)
-        nonconformities = extract_nonconformities(uploaded_file)
 
+        nonconformities = extract_nonconformities(uploaded_file)
         if nonconformities is not None:
             st.write("### Table des Non-Conformités")
             st.dataframe(nonconformities)
 
-            if st.button("Chargement des données"):
+            if st.button("Charger les données"):
                 insert_into_supabase(metadata, nonconformities)
 
 if __name__ == "__main__":
