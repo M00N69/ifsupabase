@@ -9,10 +9,6 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Allowed values for correctionstatus and other constrained fields
-VALID_CORRECTION_STATUS = ["En cours", "Soumise", "Validée"]
-VALID_ACTION_STATUS = ["En cours", "Soumise", "Validée"]
-
 # Utility functions
 def sanitize_value(value):
     """Clean and convert values to avoid errors."""
@@ -20,7 +16,6 @@ def sanitize_value(value):
         value = value[0]
     if isinstance(value, str):
         value = value.strip()
-        # Try parsing date if applicable
         try:
             parsed_date = datetime.strptime(value, "%d.%m.%Y")
             return parsed_date.strftime("%Y-%m-%d")
@@ -31,39 +26,72 @@ def sanitize_value(value):
         return None  # Return None for empty values
     return str(value)
 
-def validate_enum_value(value, valid_values):
-    """Validate enum-like fields and map invalid values to None."""
-    if value and value not in valid_values:
-        return None  # Replace invalid value with None
-    return value
+def fetch_coid_list():
+    """Fetch unique COID values for the dropdown."""
+    try:
+        response = supabase.table("entreprises").select("coid").execute()
+        coid_list = [entry["coid"] for entry in response.data if "coid" in entry]
+        return coid_list
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération des COID : {e}")
+        return []
 
-def sanitize_dates(dataframe, date_columns):
-    """Ensure date columns are properly formatted or set to None."""
-    for date_col in date_columns:
-        if date_col in dataframe.columns:
-            dataframe[date_col] = dataframe[date_col].apply(
-                lambda x: sanitize_value(x) if x else None
-            )
-    return dataframe
+def fetch_nonconformities(coid_filter=None):
+    """Fetch non-conformities data based on COID filter."""
+    try:
+        query = supabase.table("nonconformites").select("*")
+        if coid_filter:
+            # Filter non-conformities based on COID
+            entreprise_response = supabase.table("entreprises").select("id").eq("coid", coid_filter).execute()
+            if entreprise_response.data:
+                entreprise_id = entreprise_response.data[0]["id"]
+                query = query.eq("entreprise_id", entreprise_id)
+        response = query.execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération des non-conformités : {e}")
+        return pd.DataFrame()
 
-def sanitize_constrained_fields(dataframe):
-    """Sanitize fields with constraints like correctionstatus."""
-    if "correctionstatus" in dataframe.columns:
-        dataframe["correctionstatus"] = dataframe["correctionstatus"].apply(
-            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS) or "En cours"  # Default to 'En cours'
-        )
-    if "correctiveactionstatus" in dataframe.columns:
-        dataframe["correctiveactionstatus"] = dataframe["correctiveactionstatus"].apply(
-            lambda x: validate_enum_value(x, VALID_ACTION_STATUS) or "En cours"  # Default to 'En cours'
-        )
-    return dataframe
+def render_nonconformities_page():
+    """Page for viewing and filtering non-conformities."""
+    st.title("Gestion des Non-Conformités")
+
+    # Fetch available COIDs for dropdown
+    coid_list = fetch_coid_list()
+    selected_coid = st.sidebar.selectbox("Filtrer par COID", options=["Tous"] + coid_list)
+
+    # Fetch non-conformities based on the selected COID
+    if selected_coid == "Tous":
+        nonconformities = fetch_nonconformities()
+    else:
+        nonconformities = fetch_nonconformities(selected_coid)
+
+    if not nonconformities.empty:
+        st.write("### Non-Conformités")
+        st.dataframe(nonconformities)
+    else:
+        st.info("Aucune donnée trouvée pour ce filtre.")
+
+def render_upload_page():
+    """Page for uploading Excel files."""
+    st.title("Téléverser un fichier Excel")
+    uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
+    if uploaded_file:
+        metadata = extract_metadata(uploaded_file)
+        nonconformities = extract_nonconformities(uploaded_file)
+        if metadata and nonconformities is not None:
+            st.write("### Métadonnées")
+            st.json(metadata)
+            st.write("### Non-Conformités")
+            st.dataframe(nonconformities)
+            if st.button("Insérer dans Supabase"):
+                insert_into_supabase(metadata, nonconformities)
 
 def extract_metadata(uploaded_file):
     """Extract metadata from the audit."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-
         metadata = {
             "nom": sanitize_value(ws.cell(4, 3).value),  # Row 4, Col C
             "coid": sanitize_value(ws.cell(5, 3).value),  # Row 5, Col C
@@ -72,24 +100,20 @@ def extract_metadata(uploaded_file):
             "date_audit": sanitize_value(ws.cell(9, 3).value),  # Row 9, Col C
         }
         return metadata
-
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
 def extract_nonconformities(uploaded_file):
-    """Extract nonconformities from the table."""
+    """Extract non-conformities from the table."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-
         headers = [sanitize_value(cell.value) for cell in ws[12]]  # Row 12 headers
         data = []
         for row in ws.iter_rows(min_row=14, values_only=True):  # Rows starting at 14
             if any(row):  # Skip empty rows
                 data.append([sanitize_value(cell) for cell in row])
-
-        # Rename columns to match 'nonconformites' table fields
         df = pd.DataFrame(data, columns=headers)
         column_mapping = {
             "requirementNo": "requirementno",
@@ -109,87 +133,32 @@ def extract_nonconformities(uploaded_file):
             "releaseDate": "releasedate",
         }
         df = df.rename(columns=column_mapping)
-
-        # Sanitize date columns
-        date_columns = ["correctionduedate", "correctiveactionduedate", "releasedate"]
-        df = sanitize_dates(df, date_columns)
-
-        # Sanitize constrained fields
-        df = sanitize_constrained_fields(df)
-
         return df
-
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
 
 def insert_into_supabase(metadata, nonconformities):
-    """Insert metadata and nonconformities into Supabase."""
+    """Insert metadata and non-conformities into Supabase."""
     try:
-        # Check if the company already exists
         existing = supabase.table("entreprises").select("*").eq("coid", metadata["coid"]).execute()
         if existing.data:
             st.warning("L'entreprise avec ce COID existe déjà. Téléversement ignoré.")
             return
-
-        # Insert metadata into the 'entreprises' table
         response = supabase.table("entreprises").insert(metadata).execute()
-        
-        # Check response for errors
         if not response.data:
             st.error(f"Erreur lors de l'insertion des métadonnées : {response}")
-            return None
-
-        # Extract the `id` of the inserted enterprise
+            return
         entreprise_id = response.data[0]["id"]
-
-        # Add the enterprise ID to each non-conformity row
         nonconformities["entreprise_id"] = entreprise_id
-
-        # Prepare non-conformities data for insertion
         nonconformities_records = nonconformities.to_dict(orient="records")
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
-        
-        # Check response for errors
         if not response.data:
             st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
-            return None
-
+            return
         st.success("Les données ont été insérées avec succès dans Supabase.")
     except Exception as e:
         st.error(f"Erreur lors de l'insertion dans Supabase : {e}")
-
-def render_upload_page():
-    """Page for uploading Excel files."""
-    st.title("Téléverser un fichier Excel")
-    uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
-    if uploaded_file:
-        metadata = extract_metadata(uploaded_file)
-        nonconformities = extract_nonconformities(uploaded_file)
-        if metadata and nonconformities is not None:
-            st.write("### Métadonnées")
-            st.json(metadata)
-            st.write("### Non-Conformités")
-            st.dataframe(nonconformities)
-            if st.button("Insérer dans Supabase"):
-                insert_into_supabase(metadata, nonconformities)
-
-def render_nonconformities_page():
-    """Page for viewing and editing non-conformities."""
-    st.title("Gestion des Non-Conformités")
-    coid_filter = st.text_input("Filtrer par COID ou Nom de l'entreprise", "")
-    # Fetch data from Supabase
-    try:
-        query = supabase.table("nonconformites").select("*")
-        if coid_filter:
-            query = query.eq("coid", coid_filter)
-        nonconformities = pd.DataFrame(query.execute().data)
-        if not nonconformities.empty:
-            st.dataframe(nonconformities)
-        else:
-            st.info("Aucune donnée trouvée pour ce filtre.")
-    except Exception as e:
-        st.error(f"Erreur lors du chargement des données : {e}")
 
 def main():
     """Main application logic."""
@@ -197,8 +166,8 @@ def main():
         "Téléverser un fichier Excel": render_upload_page,
         "Visualiser les Non-Conformités": render_nonconformities_page,
     }
-    st.sidebar.title("Choisissez une page")
-    page = st.sidebar.selectbox("Navigation", list(pages.keys()))
+    st.sidebar.title("Navigation")
+    page = st.sidebar.selectbox("Choisissez une page", list(pages.keys()))
     pages[page]()
 
 if __name__ == "__main__":
