@@ -1,10 +1,11 @@
-from openpyxl import load_workbook
 import pandas as pd
+from openpyxl import load_workbook
 from datetime import datetime
+import streamlit as st
 
 
 def sanitize_value(value):
-    """Clean and convert values to avoid errors."""
+    """Nettoie et convertit les valeurs pour éviter les erreurs."""
     if isinstance(value, tuple):
         value = value[0]
     if isinstance(value, str):
@@ -16,41 +17,37 @@ def sanitize_value(value):
             pass
         return value
     if value in [None, "", " "]:
-        return None
+        return None  # Retourne None pour les valeurs vides
     return str(value)
 
 
 def extract_metadata(uploaded_file):
-    """Extract metadata from the Excel file."""
+    """Extrait les métadonnées du fichier Excel."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-        metadata = {
-            "nom": sanitize_value(ws.cell(4, 3).value),
-            "coid": sanitize_value(ws.cell(5, 3).value),
-            "referentiel": sanitize_value(ws.cell(7, 3).value),
-            "type_audit": sanitize_value(ws.cell(8, 3).value),
-            "date_audit": sanitize_value(ws.cell(9, 3).value),
+        return {
+            "nom": sanitize_value(ws.cell(4, 3).value),  # Ligne 4, Colonne C
+            "coid": sanitize_value(ws.cell(5, 3).value),  # Ligne 5, Colonne C
+            "referentiel": sanitize_value(ws.cell(7, 3).value),  # Ligne 7, Colonne C
+            "type_audit": sanitize_value(ws.cell(8, 3).value),  # Ligne 8, Colonne C
+            "date_audit": sanitize_value(ws.cell(9, 3).value),  # Ligne 9, Colonne C
         }
-        if not all(metadata.values()):
-            raise ValueError("Les métadonnées sont incomplètes ou invalides.")
-        return metadata
     except Exception as e:
-        raise ValueError(f"Erreur lors de l'extraction des métadonnées : {e}")
+        st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
+        return None
 
 
 def extract_nonconformities(uploaded_file):
-    """Extract non-conformities from the table."""
+    """Extrait les non-conformités du fichier Excel."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
-        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Row 12
+        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Ligne 12 (en-têtes)
         data = []
-
-        for row in ws.iter_rows(min_row=14, values_only=True):
-            if any(row):
+        for row in ws.iter_rows(min_row=14, values_only=True):  # Données à partir de la ligne 14
+            if any(row):  # Ignore les lignes vides
                 data.append([sanitize_value(cell) for cell in row])
-
         df = pd.DataFrame(data, columns=headers)
         column_mapping = {
             "requirementNo": "requirementno",
@@ -71,4 +68,5 @@ def extract_nonconformities(uploaded_file):
         }
         return df.rename(columns=column_mapping)
     except Exception as e:
-        raise ValueError(f"Erreur lors de l'extraction des non-conformités : {e}")
+        st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
+        return None
