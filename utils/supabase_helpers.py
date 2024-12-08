@@ -47,6 +47,16 @@ def insert_into_supabase(metadata, nonconformities):
         entreprise_id = response.data[0]["id"]
         nonconformities["entreprise_id"] = entreprise_id
         nonconformities_records = nonconformities.to_dict(orient="records")
+
+        # Ensure date fields are correctly formatted
+        for record in nonconformities_records:
+            for key in ["correctionduedate", "correctiveactionduedate", "releasedate"]:
+                if key in record and record[key]:
+                    try:
+                        record[key] = datetime.strptime(record[key], "%Y-%m-%d").strftime("%Y-%m-%d")
+                    except ValueError:
+                        record[key] = None
+
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         if not response.data:
             st.error(f"Erreur lors de l'insertion des non-conformités : {response}")
