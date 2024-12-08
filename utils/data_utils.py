@@ -1,64 +1,58 @@
 from openpyxl import load_workbook
 import pandas as pd
+from datetime import datetime
+
 
 def sanitize_value(value):
-    """
-    Clean and convert values to avoid errors.
-    Args:
-        value (Any): The value to sanitize.
-    Returns:
-        str or None: Sanitized value or None if empty.
-    """
+    """Clean and convert values to avoid errors."""
     if isinstance(value, tuple):
         value = value[0]
     if isinstance(value, str):
         value = value.strip()
-        if value == "":
-            return None
+        try:
+            # Handle date conversion
+            parsed_date = datetime.strptime(value, "%d.%m.%Y")
+            return parsed_date.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+        return value
     if value in [None, "", " "]:
-        return None  # Return None for empty values
-    return value
+        return None  # Normalize empty values to None
+    return str(value)
+
 
 def extract_metadata(uploaded_file):
-    """
-    Extract metadata from the audit file.
-    Args:
-        uploaded_file (UploadedFile): The uploaded Excel file.
-    Returns:
-        dict: Extracted metadata as a dictionary.
-    """
+    """Extract metadata from the Excel file."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
         return {
-            "nom": sanitize_value(ws.cell(4, 3).value),  # Row 4, Col C
-            "coid": sanitize_value(ws.cell(5, 3).value),  # Row 5, Col C
-            "referentiel": sanitize_value(ws.cell(7, 3).value),  # Row 7, Col C
-            "type_audit": sanitize_value(ws.cell(8, 3).value),  # Row 8, Col C
-            "date_audit": sanitize_value(ws.cell(9, 3).value),  # Row 9, Col C
+            "nom": sanitize_value(ws.cell(4, 3).value),  # Row 4, Column 3 (C)
+            "coid": sanitize_value(ws.cell(5, 3).value),  # Row 5, Column 3 (C)
+            "referentiel": sanitize_value(ws.cell(7, 3).value),  # Row 7, Column 3 (C)
+            "type_audit": sanitize_value(ws.cell(8, 3).value),  # Row 8, Column 3 (C)
+            "date_audit": sanitize_value(ws.cell(9, 3).value),  # Row 9, Column 3 (C)
         }
     except Exception as e:
         raise ValueError(f"Erreur lors de l'extraction des métadonnées : {e}")
 
+
 def extract_nonconformities(uploaded_file):
-    """
-    Extract non-conformities from the audit file.
-    Args:
-        uploaded_file (UploadedFile): The uploaded Excel file.
-    Returns:
-        pd.DataFrame: A DataFrame containing non-conformities data.
-    """
+    """Extract non-conformities table from the Excel file."""
     try:
         wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
 
-        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Row 12 headers
+        # Extract header row
+        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Row 12
         data = []
-        for row in ws.iter_rows(min_row=14, values_only=True):  # Start from row 14
-            if any(row):  # Skip empty rows
+
+        # Extract data rows starting at Row 14
+        for row in ws.iter_rows(min_row=14, values_only=True):
+            if any(row):  # Ignore empty rows
                 data.append([sanitize_value(cell) for cell in row])
 
-        # Create DataFrame and map columns to the required schema
+        # Convert to DataFrame and rename columns
         df = pd.DataFrame(data, columns=headers)
         column_mapping = {
             "requirementNo": "requirementno",
