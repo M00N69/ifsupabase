@@ -1,6 +1,12 @@
 import streamlit as st
+from supabase import create_client, Client
 from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities, upload_file_to_supabase
 import pandas as pd
+
+# Configuration Supabase via st.secrets
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def render_nonconformities_page():
     """Page for viewing and filtering non-conformities."""
