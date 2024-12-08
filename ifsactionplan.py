@@ -8,10 +8,10 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def extract_metadata(file_path):
-    """Extraire les métadonnées générales de l'audit à partir de cellules fixes."""
+    """Extraire les métadonnées générales de l'audit à partir de cellules fixes en gérant les cellules fusionnées."""
     try:
-        # Charger les 10 premières lignes pour les métadonnées
-        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10)
+        # Charger les données en désactivant la fusion des cellules
+        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10, engine='openpyxl', merge_cells=False)
 
         # Extraction directe des cellules spécifiques
         metadata_dict = {
@@ -37,7 +37,7 @@ def extract_nonconformities(file_path):
     """Extraire les non-conformités depuis le tableau principal."""
     try:
         # Charger les non-conformités à partir de la ligne 13
-        data = pd.read_excel(file_path, sheet_name=0, skiprows=12)
+        data = pd.read_excel(file_path, sheet_name=0, skiprows=12, engine='openpyxl', merge_cells=False)
 
         # Renommer les colonnes pour correspondre aux champs dans Supabase
         data.rename(columns={
