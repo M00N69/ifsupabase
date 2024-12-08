@@ -2,23 +2,28 @@ import pandas as pd
 import streamlit as st
 from supabase import create_client, Client
 
-# Configuration de Supabase
+# Configuration Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Fonction pour extraire les métadonnées
+# Fonction pour extraire les métadonnées avec corrections
 def extract_metadata(file_path):
     """Extraire les métadonnées générales de l'audit."""
     try:
-        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10)
+        # Charger une plage spécifique du fichier Excel
+        metadata = pd.read_excel(file_path, sheet_name=0, header=None, nrows=10, usecols=[0, 1])
+        metadata = metadata.dropna(how='all')  # Supprimer les lignes vides
+
+        # Correction pour extraire chaque champ à partir de la bonne ligne
         metadata_dict = {
-            "Entreprise": metadata.iloc[0, 1],
-            "COID": metadata.iloc[1, 1],
-            "Référentiel": metadata.iloc[3, 1],
-            "Type d'audit": metadata.iloc[4, 1],
-            "Date de début d'audit": metadata.iloc[5, 1]
+            "Entreprise": metadata[metadata[0].str.contains("Entreprise", na=False)].iloc[0, 1],
+            "COID": metadata[metadata[0].str.contains("COID", na=False)].iloc[0, 1],
+            "Référentiel": metadata[metadata[0].str.contains("Référentiel", na=False)].iloc[0, 1],
+            "Type d'audit": metadata[metadata[0].str.contains("Type d'audit", na=False)].iloc[0, 1],
+            "Date de début d'audit": metadata[metadata[0].str.contains("Date de début", na=False)].iloc[0, 1]
         }
+
         return metadata_dict
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
