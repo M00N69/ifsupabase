@@ -16,3 +16,4 @@ def render_upload_page():
             st.dataframe(nonconformities)
             if st.button("Insérer dans Supabase"):
                 insert_into_supabase(metadata, nonconformities)
+
