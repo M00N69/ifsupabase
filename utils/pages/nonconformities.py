@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities, update_nonconformity
+from utils.supabase_helpers import fetch_coid_list, fetch_nonconformities
 import pandas as pd
 
 def render_nonconformities_page():
@@ -41,16 +41,19 @@ def render_nonconformities_page():
                         "Statut de la correction", options=["En cours", "Soumise", "Validée"], index=0
                     )
                     if st.form_submit_button("Sauvegarder"):
-                        update_data = {
-                            "correctiondescription": correction_description,
-                            "correctionresponsibility": correction_responsibility,
-                            "correctionduedate": correction_due_date,
-                            "correctionstatus": correction_status,
-                        }
-                        response = update_nonconformity(row['id'], update_data)
-                        if response:
-                            st.success("Modifications enregistrées avec succès.")
-                        else:
-                            st.error("Erreur lors de la sauvegarde.")
+                        try:
+                            update_data = {
+                                "correctiondescription": correction_description,
+                                "correctionresponsibility": correction_responsibility,
+                                "correctionduedate": correction_due_date,
+                                "correctionstatus": correction_status,
+                            }
+                            response = supabase.table("nonconformites").update(update_data).eq("id", row['id']).execute()
+                            if response.data:
+                                st.success("Modifications enregistrées avec succès.")
+                            else:
+                                st.error(f"Erreur lors de la sauvegarde : {response}")
+                        except Exception as e:
+                            st.error(f"Erreur lors de la sauvegarde : {e}")
     else:
         st.info("Aucune donnée trouvée pour ce filtre.")
