@@ -9,6 +9,10 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Allowed values for correctionstatus and other constrained fields
+VALID_CORRECTION_STATUS = ["En cours", "Soumise", "Validée"]
+VALID_ACTION_STATUS = ["En cours", "Soumise", "Validée"]
+
 def sanitize_value(value):
     """Clean and convert values to avoid errors."""
     if isinstance(value, tuple):
@@ -20,10 +24,17 @@ def sanitize_value(value):
             parsed_date = datetime.strptime(value, "%d.%m.%Y")
             return parsed_date.strftime("%Y-%m-%d")
         except ValueError:
-            return value  # Return as string if not a date
+            pass
+        return value
     if value in [None, "", " "]:
         return None  # Return None for empty values
     return str(value)
+
+def validate_enum_value(value, valid_values):
+    """Validate enum-like fields and map invalid values to None."""
+    if value and value not in valid_values:
+        return None  # Replace invalid value with None
+    return value
 
 def sanitize_dates(dataframe, date_columns):
     """Ensure date columns are properly formatted or set to None."""
@@ -32,6 +43,18 @@ def sanitize_dates(dataframe, date_columns):
             dataframe[date_col] = dataframe[date_col].apply(
                 lambda x: sanitize_value(x) if x else None
             )
+    return dataframe
+
+def sanitize_constrained_fields(dataframe):
+    """Sanitize fields with constraints like correctionstatus."""
+    if "correctionstatus" in dataframe.columns:
+        dataframe["correctionstatus"] = dataframe["correctionstatus"].apply(
+            lambda x: validate_enum_value(x, VALID_CORRECTION_STATUS)
+        )
+    if "correctiveactionstatus" in dataframe.columns:
+        dataframe["correctiveactionstatus"] = dataframe["correctiveactionstatus"].apply(
+            lambda x: validate_enum_value(x, VALID_ACTION_STATUS)
+        )
     return dataframe
 
 def extract_metadata(uploaded_file):
@@ -89,6 +112,9 @@ def extract_nonconformities(uploaded_file):
         # Sanitize date columns
         date_columns = ["correctionduedate", "correctiveactionduedate", "releasedate"]
         df = sanitize_dates(df, date_columns)
+
+        # Sanitize constrained fields
+        df = sanitize_constrained_fields(df)
 
         return df
 
