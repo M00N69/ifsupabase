@@ -3,68 +3,69 @@ from openpyxl import load_workbook
 from supabase import create_client, Client
 import pandas as pd
 
-# Configuration de Supabase via st.secrets
+# Configuration Supabase via st.secrets
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Fonctions utilitaires
-def get_merged_cell_value(ws, row, column):
-    """Obtenir la valeur d'une cellule fusionnée ou non."""
-    for merged_range in ws.merged_cells.ranges:
-        if (row, column) in merged_range:
-            return ws.cell(merged_range.min_row, merged_range.min_col).value
-    return ws.cell(row, column).value
-
+# Fonction utilitaire pour gérer les valeurs
 def sanitize_value(value):
-    """Nettoyer les valeurs pour éviter les erreurs."""
+    """Nettoyer et convertir les valeurs pour éviter les erreurs."""
     if isinstance(value, tuple):
-        return value[0]
-    if isinstance(value, (str, int, float)):
-        return value.strip() if isinstance(value, str) else value
-    return None
+        value = value[0]
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return "Non spécifié"
+    return str(value)
 
+# Fonction pour extraire les métadonnées
 def extract_metadata(uploaded_file):
     """Extraire les métadonnées générales de l'audit."""
     try:
-        wb = load_workbook(uploaded_file)
+        wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
 
         metadata = {
-            "nom": sanitize_value(get_merged_cell_value(ws, 4, 3)),  # Ligne 4, Colonne C
-            "coid": sanitize_value(get_merged_cell_value(ws, 5, 3)),  # Ligne 5, Colonne C
-            "referentiel": sanitize_value(get_merged_cell_value(ws, 7, 3)),  # Ligne 7, Colonne C
-            "type_audit": sanitize_value(get_merged_cell_value(ws, 8, 3)),  # Ligne 8, Colonne C
-            "date_audit": sanitize_value(get_merged_cell_value(ws, 9, 3)),  # Ligne 9, Colonne C
+            "nom": sanitize_value(ws.cell(4, 3).value),  # Ligne 4, Colonne C
+            "coid": sanitize_value(ws.cell(5, 3).value),  # Ligne 5, Colonne C
+            "referentiel": sanitize_value(ws.cell(7, 3).value),  # Ligne 7, Colonne C
+            "type_audit": sanitize_value(ws.cell(8, 3).value),  # Ligne 8, Colonne C
+            "date_audit": sanitize_value(ws.cell(9, 3).value),  # Ligne 9, Colonne C
         }
 
-        for key, value in metadata.items():
-            if value is None or value == "":
-                st.warning(f"Le champ {key} est vide ou invalide.")
-                metadata[key] = "Non spécifié"
+        # Vérification des champs obligatoires
+        if not metadata["nom"] or metadata["nom"] == "Non spécifié":
+            st.error("Le champ Entreprise est vide. Veuillez vérifier votre fichier Excel.")
+        if not metadata["coid"] or metadata["coid"] == "Non spécifié":
+            st.error("Le champ COID est vide. Veuillez vérifier votre fichier Excel.")
 
         return metadata
+
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
+# Fonction pour extraire les non-conformités
 def extract_nonconformities(uploaded_file):
-    """Extraire les non-conformités depuis la table."""
+    """Extraire les non-conformités depuis le tableau."""
     try:
-        wb = load_workbook(uploaded_file)
+        wb = load_workbook(uploaded_file, data_only=True)
         ws = wb.active
 
-        headers = [cell.value for cell in ws[12]]  # Ligne 12
+        headers = [sanitize_value(cell.value) for cell in ws[12]]  # Ligne 12 pour les en-têtes
         data = []
         for row in ws.iter_rows(min_row=14, values_only=True):  # Lignes à partir de 14
             if any(row):  # Ignorer les lignes vides
-                data.append(row)
+                data.append([sanitize_value(cell) for cell in row])
 
         return pd.DataFrame(data, columns=headers)
+
     except Exception as e:
         st.error(f"Erreur lors de l'extraction des non-conformités : {e}")
         return None
 
+# Fonction pour insérer dans Supabase
 def insert_into_supabase(metadata, nonconformities):
     """Insérer les données dans Supabase."""
     try:
@@ -73,12 +74,12 @@ def insert_into_supabase(metadata, nonconformities):
         if response.status_code != 201:
             st.error(f"Erreur lors de l'insertion des métadonnées : {response.json()}")
             return None
-        entreprise_id = response.json()[0]["id"]
+        entreprise_id = response.data[0]["id"]
 
         # Ajouter l'ID de l'entreprise à chaque ligne de non-conformité
         nonconformities["entreprise_id"] = entreprise_id
 
-        # Insérer les non-conformités dans la table "nonconformites"
+        # Préparer les données pour l'insertion
         nonconformities_records = nonconformities.to_dict(orient="records")
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         if response.status_code != 201:
