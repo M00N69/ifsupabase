@@ -90,6 +90,7 @@ def extract_nonconformities(uploaded_file):
             "requirementNo": "requirementno",
             "requirementText": "requirementtext",
             "requirementExplanation": "requirementexplanation",
+            "requirementScore": "requirementscore", 
             "correctionDescription": "correctiondescription",
             "correctionResponsibility": "correctionresponsibility",
             "correctionDueDate": "correctionduedate",
