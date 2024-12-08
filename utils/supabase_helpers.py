@@ -1,49 +1,60 @@
 from supabase import Client
+import streamlit as st
 
 
-def check_existing_metadata(client: Client, coid):
-    """Check if metadata with a specific COID already exists."""
+def check_existing_metadata(client: Client, coid: str):
+    """Vérifie si une entreprise avec un COID existe déjà dans Supabase."""
     try:
         response = client.table("entreprises").select("*").eq("coid", coid).execute()
-        return response.data
+        return response.data if response.data else None
     except Exception as e:
-        raise ValueError(f"Erreur lors de la vérification des métadonnées existantes : {e}")
+        st.error(f"Erreur lors de la vérification des métadonnées (COID) : {e}")
+        return None
 
 
 def insert_metadata(client: Client, metadata: dict):
-    """Insert metadata into the 'entreprises' table."""
+    """Insère les métadonnées dans la table 'entreprises'."""
     try:
         response = client.table("entreprises").insert(metadata).execute()
         if not response.data:
-            raise ValueError(f"Erreur lors de l'insertion des métadonnées : {response}")
-        return response.data[0]["id"]  # Return entreprise_id
+            raise ValueError(f"Échec de l'insertion des métadonnées : {response}")
+        return response.data[0]["id"]  # Retourne l'ID de l'entreprise
     except Exception as e:
-        raise ValueError(f"Erreur lors de l'insertion des métadonnées : {e}")
+        st.error(f"Erreur lors de l'insertion des métadonnées : {e}")
+        raise
 
 
-def insert_nonconformities(client: Client, nonconformities, entreprise_id):
-    """Insert non-conformities into the 'nonconformites' table."""
+def insert_nonconformities(client: Client, nonconformities, entreprise_id: str):
+    """Insère les non-conformités dans la table 'nonconformites'."""
     try:
-        nonconformities["entreprise_id"] = entreprise_id
+        nonconformities["entreprise_id"] = entreprise_id  # Ajout de l'ID de l'entreprise
         records = nonconformities.to_dict(orient="records")
         response = client.table("nonconformites").insert(records).execute()
         if not response.data:
-            raise ValueError(f"Erreur lors de l'insertion des non-conformités : {response}")
+            raise ValueError(f"Échec de l'insertion des non-conformités : {response}")
         return response.data
     except Exception as e:
-        raise ValueError(f"Erreur lors de l'insertion des non-conformités : {e}")
+        st.error(f"Erreur lors de l'insertion des non-conformités : {e}")
+        raise
 
 
-def insert_into_supabase(client: Client, metadata, nonconformities):
-    """Insert metadata and non-conformities into Supabase."""
+def update_nonconformity(client: Client, nonconformity_id: str, updates: dict):
+    """Met à jour une non-conformité spécifique."""
     try:
-        existing = check_existing_metadata(client, metadata["coid"])
-        if existing:
-            return {"status": "warning", "message": "L'entreprise avec ce COID existe déjà."}
-
-        entreprise_id = insert_metadata(client, metadata)
-        insert_nonconformities(client, nonconformities, entreprise_id)
-
-        return {"status": "success", "message": "Données insérées avec succès."}
+        response = client.table("nonconformites").update(updates).eq("id", nonconformity_id).execute()
+        if not response.data:
+            raise ValueError(f"Échec de la mise à jour : {response}")
+        return response.data
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        st.error(f"Erreur lors de la mise à jour de la non-conformité : {e}")
+        raise
+
+
+def fetch_coid_list(client: Client):
+    """Récupère la liste des COID uniques pour le dropdown."""
+    try:
+        response = client.table("entreprises").select("coid").execute()
+        return [entry["coid"] for entry in response.data if "coid" in entry]
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération des COID : {e}")
+        return []
