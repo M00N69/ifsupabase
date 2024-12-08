@@ -1,33 +1,21 @@
 import streamlit as st
-from utils.supabase_helpers import insert_metadata_and_nonconformities
 from utils.data_utils import extract_metadata, extract_nonconformities
-
+from utils.supabase_helpers import insert_metadata_and_nonconformities
 
 def render_upload_page():
-    """Page pour téléverser un fichier Excel et insérer les données dans Supabase."""
+    """Page for uploading Excel files."""
     st.title("Téléverser un fichier Excel")
-
     uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
 
     if uploaded_file:
-        try:
-            # Extraction des métadonnées et non-conformités
-            metadata = extract_metadata(uploaded_file)
-            nonconformities = extract_nonconformities(uploaded_file)
+        metadata = extract_metadata(uploaded_file)
+        nonconformities = extract_nonconformities(uploaded_file)
 
-            # Vérification des données extraites
-            if metadata and not nonconformities.empty:
-                st.success("Données correctement extraites. Prêtes pour l'insertion.")
-            else:
-                st.error("Erreur : les données extraites sont incomplètes ou incorrectes.")
-                return
+        if metadata and not nonconformities.empty:
+            st.write("### Métadonnées")
+            st.json(metadata)
+            st.write("### Non-Conformités")
+            st.dataframe(nonconformities)
 
-            # Bouton pour insérer dans Supabase
             if st.button("Insérer dans Supabase"):
-                # Appel à la fonction pour insérer dans Supabase
-                result_message = insert_metadata_and_nonconformities(
-                    metadata, nonconformities
-                )
-                st.success(result_message)
-        except Exception as e:
-            st.error(f"Erreur : {e}")
+                insert_metadata_and_nonconformities(metadata, nonconformities)
