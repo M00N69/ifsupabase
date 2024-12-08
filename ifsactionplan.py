@@ -16,10 +16,10 @@ def sanitize_value(value):
         return value.strip() if isinstance(value, str) else value
     return None
 
-def extract_metadata(file_path):
+def extract_metadata(uploaded_file):
     """Extraire les métadonnées générales de l'audit."""
     try:
-        wb = load_workbook(file_path)
+        wb = load_workbook(uploaded_file)
         ws = wb.active
 
         metadata_dict = {
@@ -40,8 +40,18 @@ def extract_metadata(file_path):
         st.error(f"Erreur lors de l'extraction des métadonnées : {e}")
         return None
 
+def inspect_excel(uploaded_file):
+    """Inspecter le contenu brut d'un fichier Excel téléversé via Streamlit."""
+    try:
+        wb = load_workbook(uploaded_file)
+        ws = wb.active
+        for row_index, row in enumerate(ws.iter_rows(values_only=True), start=1):
+            st.write(f"Ligne {row_index}: {row}")  # Affiche chaque ligne dans Streamlit
+    except Exception as e:
+        st.error(f"Erreur lors de l'inspection du fichier : {e}")
+
 def main():
-    st.title("Extraction des Métadonnées")
+    st.title("Extraction des Métadonnées et des Non-Conformités")
     uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
 
     if uploaded_file:
