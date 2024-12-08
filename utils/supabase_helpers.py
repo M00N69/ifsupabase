@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
+from datetime import datetime
 
 # Configuration Supabase via st.secrets
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -48,7 +49,7 @@ def insert_into_supabase(metadata, nonconformities):
         nonconformities["entreprise_id"] = entreprise_id
         nonconformities_records = nonconformities.to_dict(orient="records")
 
-        # Ensure date fields are correctly formatted
+        # Ensure date fields are correctly formatted and handle empty values
         for record in nonconformities_records:
             for key in ["correctionduedate", "correctiveactionduedate", "releasedate"]:
                 if key in record and record[key]:
@@ -56,6 +57,8 @@ def insert_into_supabase(metadata, nonconformities):
                         record[key] = datetime.strptime(record[key], "%Y-%m-%d").strftime("%Y-%m-%d")
                     except ValueError:
                         record[key] = None
+                elif key in record:
+                    record[key] = None
 
         response = supabase.table("nonconformites").insert(nonconformities_records).execute()
         if not response.data:
