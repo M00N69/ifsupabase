@@ -1,19 +1,28 @@
 import streamlit as st
 from openpyxl import load_workbook
 
+def get_merged_cell_value(ws, row, column):
+    """
+    Obtenir la valeur d'une cellule fusionnée si elle existe.
+    """
+    for merged_range in ws.merged_cells.ranges:
+        if (row, column) in merged_range:
+            return ws.cell(merged_range.min_row, merged_range.min_col).value
+    return ws.cell(row, column).value
+
 def extract_metadata(file_path):
-    """Extraire les métadonnées générales de l'audit."""
+    """Extraire les métadonnées générales de l'audit en gérant les cellules fusionnées."""
     try:
         wb = load_workbook(file_path)
         ws = wb.active
 
-        # Indices ajustés après inspection
+        # Utiliser get_merged_cell_value pour lire correctement les cellules fusionnées
         metadata_dict = {
-            "Entreprise": ws.cell(row=2, column=3).value,  # Ligne 2, Colonne C
-            "COID": ws.cell(row=3, column=3).value,       # Ligne 3, Colonne C
-            "Référentiel": ws.cell(row=5, column=3).value,  # Ligne 5, Colonne C
-            "Type d'audit": ws.cell(row=6, column=3).value,  # Ligne 6, Colonne C
-            "Date de début d'audit": ws.cell(row=7, column=3).value  # Ligne 7, Colonne C
+            "Entreprise": get_merged_cell_value(ws, 3, 2),  # Ligne 3, Colonne B
+            "COID": get_merged_cell_value(ws, 4, 2),       # Ligne 4, Colonne B
+            "Référentiel": get_merged_cell_value(ws, 5, 2),  # Ligne 5, Colonne B
+            "Type d'audit": get_merged_cell_value(ws, 6, 2),  # Ligne 6, Colonne B
+            "Date de début d'audit": get_merged_cell_value(ws, 7, 2)  # Ligne 7, Colonne B
         }
 
         # Vérifier les champs manquants ou vides
@@ -28,7 +37,7 @@ def extract_metadata(file_path):
         return None
 
 def main():
-    st.title("Extraction des Métadonnées")
+    st.title("Extraction des Métadonnées et des Non-Conformités")
     uploaded_file = st.file_uploader("Téléversez un fichier Excel", type=["xlsx"])
 
     if uploaded_file:
