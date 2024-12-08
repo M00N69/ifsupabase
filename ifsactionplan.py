@@ -3,9 +3,9 @@ from openpyxl import load_workbook
 from supabase import create_client, Client
 import pandas as pd
 
-# Configuration de Supabase
-SUPABASE_URL = "https://your-supabase-url.supabase.co"  # Remplacez par votre URL Supabase
-SUPABASE_KEY = "your-supabase-key"  # Remplacez par votre clé API
+# Configuration de Supabase via st.secrets
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Fonctions utilitaires
