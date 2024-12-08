@@ -57,3 +57,4 @@ def render_nonconformities_page():
                             st.error(f"Erreur lors de la sauvegarde : {e}")
     else:
         st.info("Aucune donnée trouvée pour ce filtre.")
+
