@@ -96,3 +96,4 @@ def upload_file_to_supabase(file, nonconformity_id):
             st.error(f"Erreur lors de l'insertion des métadonnées du fichier : {response}")
     except Exception as e:
         st.error(f"Erreur lors du téléversement du fichier : {e}")
+
